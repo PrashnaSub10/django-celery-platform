@@ -1,0 +1,88 @@
+{{/*
+============================================================
+celery-beat.yaml — Celery Beat Deployment
+============================================================
+Maps to: components/workers/docker-compose.workers.yml (celery-beat)
+Only ONE Beat instance should run per deployment.
+Uses a Deployment with replicas: 1 and a PVC for schedule state.
+*/}}
+{{- if .Values.celeryBeat.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-celery-beat
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+    {{- include "celery-platform.selectorLabels" (dict "component" "celery-beat" "context" .) | nindent 4 }}
+spec:
+  # CRITICAL: Always 1 replica. Multiple Beat instances cause duplicate tasks.
+  replicas: 1
+  strategy:
+    type: Recreate  # Don't overlap — old must stop before new starts
+  selector:
+    matchLabels:
+      {{- include "celery-platform.selectorLabels" (dict "component" "celery-beat" "context" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "celery-platform.selectorLabels" (dict "component" "celery-beat" "context" .) | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: celery-beat
+          image: "{{ .Values.workerImage.repository }}:{{ .Values.workerImage.tag }}"
+          imagePullPolicy: {{ .Values.workerImage.pullPolicy }}
+          command:
+            - python3
+            - -m
+            - celery
+            - -A
+            - {{ .Values.celeryBeat.celeryApp }}
+            - beat
+            - --loglevel=info
+            - --pidfile=/tmp/celerybeat.pid
+            - --schedule=/app/beat_data/celerybeat-schedule.db
+          env:
+            {{- include "celery-platform.workerEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.celeryBeat.resources | nindent 12 }}
+          {{- if .Values.celeryBeat.persistence.enabled }}
+          volumeMounts:
+            - name: beat-data
+              mountPath: /app/beat_data
+          {{- end }}
+      {{- if .Values.celeryBeat.persistence.enabled }}
+      volumes:
+        - name: beat-data
+          persistentVolumeClaim:
+            claimName: {{ include "celery-platform.fullname" . }}-beat-data
+      {{- end }}
+---
+{{- if .Values.celeryBeat.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-beat-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.celeryBeat.persistence.storageClass }}
+  storageClassName: {{ .Values.celeryBeat.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.celeryBeat.persistence.size }}
+{{- end }}
+{{- end }}

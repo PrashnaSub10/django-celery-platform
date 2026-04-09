@@ -1,0 +1,40 @@
+# ============================================================
+# Minimal Mode overrides
+# ============================================================
+# Philosophy: "Get something working you can fully understand in 1 hour"
+# Purpose: Simplicity, low resource usage.
+# Excludes: RabbitMQ, Prometheus stack, Alertmanager.
+# ============================================================
+
+services:
+  # Turn off RabbitMQ infrastructure
+  rabbitmq:
+    scale: 0
+  flower-rabbitmq:
+    scale: 0
+  worker-critical:
+    scale: 0
+  rabbitmq-exporter:
+    scale: 0
+  celery-exporter-rabbitmq:
+    scale: 0
+
+  # Turn off Kafka infrastructure
+  kafka:
+    scale: 0
+
+  # Turn off Monitoring stack
+  prometheus:
+    scale: 0
+  grafana:
+    scale: 0
+  redis-exporter:
+    scale: 0
+  nginx-exporter:
+    scale: 0
+  node-exporter:
+    scale: 0
+  celery-exporter-redis:
+    scale: 0
+  alertmanager:
+    scale: 0

@@ -1,0 +1,27 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  # cluster removed — no scrape target sets this label so it was a no-op
+  # grouping key that prevented related alerts from being batched together.
+  group_by: ['alertname', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  receiver: 'default-receiver'
+
+# Suppress warning-severity alerts when a critical alert for the same
+# alertname is already firing.  Prevents duplicate pages during an outage.
+inhibit_rules:
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['alertname']
+
+receivers:
+  - name: 'default-receiver'
+    # Optional Slack webhook, configured in .env.secrets
+    # slack_configs:
+    # - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+    #   channel: '#alerts'

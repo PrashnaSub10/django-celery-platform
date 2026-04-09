@@ -1,0 +1,18 @@
+# .github/CODEOWNERS
+#
+# Replace @your-github-username with your actual GitHub username (or team handles).
+# These rules require review from the listed owners before any PR can be merged
+# into the protected paths below.
+#
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Fallback: repo owner reviews everything not matched below
+*                          @your-github-username
+
+/components/gateway/       @your-github-username
+/components/observability/ @your-github-username
+/components/workers/       @your-github-username
+/components/brokers/       @your-github-username
+/core/                     @your-github-username
+/docs/                     @your-github-username
+/runtime/                  @your-github-username

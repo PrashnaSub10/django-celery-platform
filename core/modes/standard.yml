@@ -1,0 +1,29 @@
+# ============================================================
+# Standard Mode overrides
+# ============================================================
+# Philosophy: "You can now see problems before users report them"
+# Purpose: Stability + visibility.
+# Adds: Prometheus, Grafana, exporters.
+# Excludes: RabbitMQ, Alertmanager.
+# ============================================================
+
+services:
+  # Turn off RabbitMQ infrastructure
+  rabbitmq:
+    scale: 0
+  flower-rabbitmq:
+    scale: 0
+  worker-critical:
+    scale: 0
+  rabbitmq-exporter:
+    scale: 0
+  celery-exporter-rabbitmq:
+    scale: 0
+
+  # Turn off Kafka infrastructure
+  kafka:
+    scale: 0
+
+  # Turn off Advanced Alerting
+  alertmanager:
+    scale: 0

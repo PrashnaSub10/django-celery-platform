@@ -1,0 +1,17 @@
+# ============================================================
+# requirements/pdf.txt — PDF generation & image processing
+# ============================================================
+# Paired with Dockerfile.pdf (which installs MuPDF, Pango, etc).
+# Only install in workers that generate PDFs or process images.
+# ============================================================
+
+PyMuPDF==1.23.26
+Pillow==10.2.0
+pillow-heif==0.13.1
+reportlab==4.0.7
+pypdf==6.7.0
+weasyprint==63.1
+xhtml2pdf==0.2.16
+arabic-reshaper==3.0.0
+python-bidi==0.4.2
+svglib==1.5.1

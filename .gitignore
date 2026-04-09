@@ -1,0 +1,96 @@
+# ============================================================
+# .gitignore — django-celery-platform
+# ============================================================
+
+# ── Secrets — NEVER commit ──────────────────────────────────
+.env
+.env.secrets
+.env.local
+.env.*.local
+.env.secrets.*
+!.env.secrets.example
+
+# ── Certificates and private keys — NEVER commit ────────────
+*.key
+*.crt
+*.csr
+*.pem
+*.srl
+# Block cert material in any subdirectory
+**/certs/*.key
+**/certs/*.crt
+**/certs/*.csr
+**/certs/*.pem
+**/certs/*.srl
+**/ssl/*.key
+**/ssl/*.crt
+**/ssl/*.pem
+# Keep placeholder files that mark gitignored directories
+!**/certs/.gitkeep
+!**/ssl/.gitkeep
+
+# ── Legacy directory — pre-migration monolith ────────────────
+# Contains project-specific scripts, old compose files, real
+# cert material, and internal deployment history that is not
+# part of the open source platform.
+legacy/
+
+# ── Project-specific docs not relevant to the platform ───────
+# Internal AI & Planning Reference Documentation
+docs/LLM_Reference_Point.md
+docs/STRATEGIC_POSITIONING.md
+docs/Additional_Works.md
+docs/KUBERNETES_PATH.md
+# Internal build debug logs with real file paths
+docs/DOCKER_BUILD_SUCCESS_EXPLANATION.md
+# Old monolith index referencing non-existent files
+docs/INDEX.md
+# Old quick-reference card for the pre-migration deployment
+docs/QUICK-REFERENCE-CARD.md
+# Old environment setup guide for the pre-migration stack
+ENV-SETUP-GUIDE.md
+
+# ── Project-specific root files ──────────────────────────────
+# Symlink or file pointing to a consuming Django project
+app
+# Demo Python/Django project (test case)
+demo/
+
+# ── Docker volumes ───────────────────────────────────────────
+volumes/
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Backup files ─────────────────────────────────────────────
+*.tar.gz
+*.zip
+backup/
+
+# ── OS files ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Claude Code context file — AI assistant instructions, not for public ─────
+CLAUDE.md
+
+# ── IDE ──────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

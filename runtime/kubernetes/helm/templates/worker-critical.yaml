@@ -1,0 +1,95 @@
+{{/*
+============================================================
+worker-critical.yaml — Critical Worker Deployment
+============================================================
+Maps to: components/workers/docker-compose.workers.yml (worker-critical)
+Deployed when brokerMode is rabbitmq or hybrid.
+Uses solo pool for long-running, non-reentrant tasks.
+*/}}
+{{- if and (include "celery-platform.rabbitmqEnabled" .) .Values.workerCritical.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-worker-critical
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+    {{- include "celery-platform.selectorLabels" (dict "component" "worker-critical" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.workerCritical.replicas }}
+  selector:
+    matchLabels:
+      {{- include "celery-platform.selectorLabels" (dict "component" "worker-critical" "context" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "celery-platform.selectorLabels" (dict "component" "worker-critical" "context" .) | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: worker-critical
+          image: "{{ .Values.workerImage.repository }}:{{ .Values.workerImage.tag }}"
+          imagePullPolicy: {{ .Values.workerImage.pullPolicy }}
+          command:
+            - python3
+            - -m
+            - celery
+            - -A
+            - {{ .Values.workerCritical.celeryApp }}
+            - worker
+            - --loglevel=info
+            - -P
+            - {{ .Values.workerCritical.pool }}
+            - --concurrency={{ .Values.workerCritical.concurrency }}
+            - -Q
+            - {{ .Values.workerCritical.queue }}
+            - --hostname=critical@%h
+            - --max-tasks-per-child={{ .Values.workerCritical.maxTasksPerChild }}
+            - --max-memory-per-child={{ .Values.workerCritical.maxMemoryPerChild }}
+            - --prefetch-multiplier={{ .Values.workerCritical.prefetchMultiplier }}
+            - --time-limit={{ .Values.workerCritical.timeLimit }}
+            - --soft-time-limit={{ .Values.workerCritical.softTimeLimit }}
+          env:
+            {{- include "celery-platform.workerEnv" . | nindent 12 }}
+          readinessProbe:
+            exec:
+              command:
+                - python3
+                - -m
+                - celery
+                - -A
+                - {{ .Values.workerCritical.celeryApp }}
+                - inspect
+                - ping
+                - -d
+                - critical@$HOSTNAME
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            {{- toYaml .Values.workerCritical.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

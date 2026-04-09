@@ -1,0 +1,98 @@
+{{/*
+============================================================
+rabbitmq.yaml — RabbitMQ StatefulSet + Service
+============================================================
+Maps to: components/brokers/docker-compose.brokers.yml (rabbitmq)
+Deployed when brokerMode is rabbitmq or hybrid.
+*/}}
+{{- if and (include "celery-platform.rabbitmqEnabled" .) .Values.rabbitmq.enabled (not .Values.rabbitmq.external.enabled) }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-rabbitmq
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+    {{- include "celery-platform.selectorLabels" (dict "component" "rabbitmq" "context" .) | nindent 4 }}
+spec:
+  serviceName: {{ include "celery-platform.fullname" . }}-rabbitmq
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "celery-platform.selectorLabels" (dict "component" "rabbitmq" "context" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "celery-platform.selectorLabels" (dict "component" "rabbitmq" "context" .) | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: rabbitmq
+          image: "{{ .Values.rabbitmq.image.repository }}:{{ .Values.rabbitmq.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.rabbitmq.port }}
+              name: amqp
+            - containerPort: {{ .Values.rabbitmq.managementPort }}
+              name: management
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: {{ .Values.rabbitmq.user | quote }}
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "celery-platform.fullname" . }}-secrets
+                  key: rabbitmq-password
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "status"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.rabbitmq.resources | nindent 12 }}
+          {{- if .Values.rabbitmq.persistence.enabled }}
+          volumeMounts:
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
+          {{- end }}
+  {{- if .Values.rabbitmq.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: rabbitmq-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.rabbitmq.persistence.storageClass }}
+        storageClassName: {{ .Values.rabbitmq.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.rabbitmq.persistence.size }}
+  {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-rabbitmq
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.rabbitmq.port }}
+      targetPort: amqp
+      name: amqp
+    - port: {{ .Values.rabbitmq.managementPort }}
+      targetPort: management
+      name: management
+  selector:
+    {{- include "celery-platform.selectorLabels" (dict "component" "rabbitmq" "context" .) | nindent 4 }}
+{{- end }}

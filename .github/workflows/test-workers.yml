@@ -1,0 +1,26 @@
+name: Test Workers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'components/workers/**'
+      - '.github/workflows/test-workers.yml'
+  pull_request:
+    paths:
+      - 'components/workers/**'
+      - '.github/workflows/test-workers.yml'
+
+jobs:
+  smoke-test:
+    name: Workers Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make smoke test executable
+        run: chmod +x components/workers/tests/smoke_test.sh
+
+      - name: Run workers smoke test
+        run: bash components/workers/tests/smoke_test.sh

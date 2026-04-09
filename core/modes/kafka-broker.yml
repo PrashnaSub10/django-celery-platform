@@ -1,0 +1,31 @@
+# ============================================================
+# kafka-broker.yml — Kafka broker mode service overrides
+# ============================================================
+# Loaded by up.sh when BROKER_MODE=kafka.
+#
+# Scales down Redis-broker workers (worker-fast, flower-redis,
+# celery-beat) and RabbitMQ workers (worker-critical, flower-rabbitmq)
+# so that only Kafka workers run.
+#
+# Redis stays active as the result backend — it is NOT scaled to 0.
+# RabbitMQ is scaled to 0.
+# ============================================================
+
+services:
+  # ── Scale down RabbitMQ infrastructure ───────────────────
+  rabbitmq:
+    scale: 0
+  worker-critical:
+    scale: 0
+  flower-rabbitmq:
+    scale: 0
+
+  # ── Scale down Redis-broker workers ──────────────────────
+  # Redis container stays up (result backend), but Redis-broker
+  # workers and their Beat/Flower instances are not needed.
+  worker-fast:
+    scale: 0
+  flower-redis:
+    scale: 0
+  celery-beat:
+    scale: 0

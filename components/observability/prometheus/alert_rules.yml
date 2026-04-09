@@ -1,0 +1,52 @@
+groups:
+  - name: celery_broker_alerts
+    rules:
+      - alert: RedisDown
+        # Use job label — this is set by Prometheus from the scrape config
+        # job_name. The `service` label is a custom label added in the scrape
+        # config and may not be present if the scrape config changes.
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis Broker is down"
+          description: "The Redis instance {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: RabbitMQDown
+        expr: up{job="rabbitmq"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RabbitMQ Broker is down"
+          description: "The RabbitMQ instance {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: RabbitMQQueueBacklog
+        expr: rabbitmq_queue_messages > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ Queue Backlog"
+          description: "Queue {{ $labels.queue }} has more than 1000 messages waiting for over 5 minutes."
+
+  - name: celery_worker_alerts
+    rules:
+      - alert: WorkerMemoryHigh
+        expr: (process_resident_memory_bytes{job=~"celery.*"} / 1024 / 1024) > 300
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Celery Worker Memory Leak"
+          description: "Celery worker {{ $labels.instance }} is using more than 300MB of RAM."
+
+      - alert: HighTaskFailureRate
+        expr: rate(celery_task_failed_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High Task Failure Rate"
+          description: "Tasks are failing at a rate > 0.1 per second over the last 5 minutes."

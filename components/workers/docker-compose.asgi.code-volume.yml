@@ -1,0 +1,16 @@
+# ============================================================
+# docker-compose.asgi.code-volume.yml — CODE_SOURCE=volume for ASGI_MODE=true
+# ============================================================
+# Loaded by up.sh when CODE_SOURCE=volume AND ASGI_MODE=true.
+# Adds the named volume mount to the Daphne ASGI service.
+# ============================================================
+
+services:
+  django-asgi:
+    volumes:
+      - app_code:/app
+
+volumes:
+  app_code:
+    external: true
+    name: ${APP_VOLUME_NAME}

@@ -1,0 +1,134 @@
+# ============================================================
+# docker-compose.asgi.yml — Optional ASGI / WebSocket Layer
+# ============================================================
+# Adds a Daphne ASGI server alongside the WSGI Django app.
+# Required when your Django project uses Django Channels for
+# WebSocket consumers or Celery task progress push.
+#
+# This file is OPTIONAL. Include it only when ASGI_MODE=true:
+#   core/up.sh handles this automatically when ASGI_MODE=true.
+#
+# What this adds:
+#   - django-asgi  : Daphne ASGI server (port 9501 internal)
+#   - redis-channels: Dedicated Redis Channel Layer (port 6380)
+#     Isolated from the Celery broker Redis to prevent
+#     noeviction policy conflicting with allkeys-lru.
+#
+# Prerequisites:
+#   - Your Django project must have django-channels installed
+#   - CHANNEL_LAYERS must point to redis-channels:6380
+#   - celery-broker-net must exist (created by brokers component)
+# ============================================================
+
+services:
+
+  # ── Django ASGI (Daphne) ──────────────────────────────────
+  # Runs your Django project under Daphne for WebSocket support.
+  # Nginx routes /ws/ traffic here; all other traffic goes to
+  # the WSGI Django app on DJANGO_UPSTREAM_PORT.
+  django-asgi:
+    image: ${WORKER_IMAGE:-celery-microservice:base}
+    container_name: ${PROJECT_NAME:-app}-django-asgi
+    entrypoint: ["/docker-entrypoint.sh"]
+    restart: always
+    working_dir: /app
+    command: >
+      python3 -m daphne
+      -b 0.0.0.0
+      -p ${ASGI_PORT:-9501}
+      --proxy-headers
+      ${ASGI_APPLICATION:-config.asgi:application}
+    environment:
+      - PYTHONPATH=/app
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
+      - CONTAINER_ENV=true
+      - EXTRA_PIP_PACKAGES=${EXTRA_PIP_PACKAGES:-}
+      - REDIS_HOST=${REDIS_HOST:-celery-redis-shared}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CHANNELS_REDIS_HOST=redis-channels
+      - CHANNELS_REDIS_PORT=6380
+      - CHANNELS_REDIS_PASSWORD=${CHANNELS_REDIS_PASSWORD:?CHANNELS_REDIS_PASSWORD must be set in .env.secrets}
+      - TZ=${TZ:-UTC}
+      - CODE_SOURCE=${CODE_SOURCE:-bind}
+      - APP_GIT_URL=${APP_GIT_URL:-}
+      - APP_GIT_BRANCH=${APP_GIT_BRANCH:-}
+      - APP_PIP_PACKAGE=${APP_PIP_PACKAGE:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:${ASGI_PORT:-9501}/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - celery-broker-net
+    depends_on:
+      redis-channels:
+        condition: service_healthy
+
+  # ── Redis Channel Layer ───────────────────────────────────
+  # Dedicated Redis instance for Django Channels only.
+  # Isolated from the Celery broker Redis (port 6379) for two reasons:
+  #   1. Channel Layer requires noeviction — messages must never be
+  #      silently dropped. Celery broker uses allkeys-lru which would
+  #      evict channel messages under memory pressure.
+  #   2. Separate failure domains — a Channels Redis restart does not
+  #      affect Celery task queues and vice versa.
+  redis-channels:
+    image: redis:7-alpine
+    container_name: redis-channels-shared
+    restart: always
+    ports:
+      - "127.0.0.1:6380:6379"
+    command: >
+      redis-server
+      --maxmemory ${CHANNELS_REDIS_MAXMEMORY:-256mb}
+      --maxmemory-policy noeviction
+      --requirepass ${CHANNELS_REDIS_PASSWORD:?CHANNELS_REDIS_PASSWORD must be set in .env.secrets}
+    volumes:
+      - channels_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${CHANNELS_REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - celery-broker-net
+
+# ── Volumes ──────────────────────────────────────────────────
+volumes:
+  channels_redis_data:
+    driver: local
+
+# ── Network ──────────────────────────────────────────────────
+networks:
+  celery-broker-net:
+    external: true
+    name: celery-broker-net

@@ -1,0 +1,35 @@
+# .gitattributes — django-celery-platform
+# Normalise line endings in the repository.
+# All text files are stored as LF in git; checkout behaviour is per-OS.
+
+# Default: normalise all text files
+* text=auto
+
+# Shell scripts must always be LF — CRLF breaks bash on Linux/macOS
+*.sh text eol=lf
+
+# Docker / Compose files — LF
+Dockerfile* text eol=lf
+docker-compose*.yml text eol=lf
+
+# Env / config files — LF
+*.env text eol=lf
+*.env.example text eol=lf
+
+# YAML / JSON / TOML — LF
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+
+# Python — LF
+*.py text eol=lf
+
+# Markdown / plain text — normalise, checkout as native
+*.md text
+*.txt text
+
+# Binary — no processing
+*.png binary
+*.jpg binary
+*.pdf binary

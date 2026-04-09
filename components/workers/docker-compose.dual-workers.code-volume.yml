@@ -1,0 +1,21 @@
+# ============================================================
+# docker-compose.dual-workers.code-volume.yml — CODE_SOURCE=volume for WORKER_MODE=dual
+# ============================================================
+# Loaded by up.sh when CODE_SOURCE=volume AND WORKER_MODE=dual.
+# Adds the named volume mount to the dual-mode specific services.
+# The volume declaration is inherited from docker-compose.workers.code-volume.yml.
+# ============================================================
+
+services:
+  flower-hybrid:
+    volumes:
+      - app_code:/app
+
+  worker-hybrid-beat:
+    volumes:
+      - app_code:/app
+
+volumes:
+  app_code:
+    external: true
+    name: ${APP_VOLUME_NAME}

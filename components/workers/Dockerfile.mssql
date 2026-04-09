@@ -1,0 +1,42 @@
+# ============================================================
+# Dockerfile.mssql — Base + Microsoft ODBC Driver 18
+# ============================================================
+# For workers that execute tasks requiring SQL Server access
+# (pyodbc, mssql-django). Pairs with requirements/mssql.txt.
+# Tag: celery-microservice:mssql
+# ============================================================
+FROM celery-microservice:base
+
+LABEL maintainer="django-celery-platform" \
+      description="Celery worker with MSSQL/ODBC support" \
+      version="3.1.0"
+
+# Switch to root for system package installation, then drop back to celery.
+USER root
+
+# Install unixODBC and Microsoft ODBC Driver 18 for SQL Server.
+# The GPG key is downloaded over HTTPS and its fingerprint is verified
+# before being imported to prevent a supply-chain attack via a compromised
+# key server or MITM on the curl pipe.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    unixodbc-dev \
+    unixodbc \
+    gnupg2 \
+    && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+       -o /tmp/microsoft.asc \
+    && gpg --dearmor < /tmp/microsoft.asc > /usr/share/keyrings/microsoft-prod.gpg \
+    && rm /tmp/microsoft.asc \
+    && curl -fsSL https://packages.microsoft.com/config/debian/12/prod.list \
+       > /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \
+    && apt-get purge -y gnupg2 \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install MSSQL Python packages
+COPY requirements/mssql.txt /tmp/requirements/mssql.txt
+RUN pip install --no-cache-dir -r /tmp/requirements/mssql.txt && \
+    rm -rf /tmp/requirements
+
+USER celery

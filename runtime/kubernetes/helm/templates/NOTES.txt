@@ -1,0 +1,35 @@
+============================================================
+ Django Celery Platform — Deployed!
+============================================================
+
+Release:   {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+Mode:      {{ .Values.mode }}
+Broker:    {{ .Values.brokerMode }}
+Workers:   {{ .Values.workerMode }}
+
+── Access Points ────────────────────────────────────────────
+
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  Gateway:       https://{{ .host }}
+{{- end }}
+{{- end }}
+
+  Flower Redis:  kubectl port-forward svc/{{ include "celery-platform.fullname" . }}-flower-redis {{ .Values.flower.redis.port }}:{{ .Values.flower.redis.port }} -n {{ .Release.Namespace }}
+
+{{- if or (eq .Values.brokerMode "rabbitmq") (eq .Values.brokerMode "hybrid") }}
+  Flower RMQ:    kubectl port-forward svc/{{ include "celery-platform.fullname" . }}-flower-rabbitmq {{ .Values.flower.rabbitmq.port }}:{{ .Values.flower.rabbitmq.port }} -n {{ .Release.Namespace }}
+{{- end }}
+
+{{- if include "celery-platform.observabilityEnabled" . }}
+  Grafana:       kubectl port-forward svc/{{ include "celery-platform.fullname" . }}-grafana 8300:3000 -n {{ .Release.Namespace }}
+  Prometheus:    kubectl port-forward svc/{{ include "celery-platform.fullname" . }}-prometheus 9090:9090 -n {{ .Release.Namespace }}
+{{- end }}
+
+── Commands ─────────────────────────────────────────────────
+
+  Check pods:    kubectl get pods -n {{ .Release.Namespace }}
+  View logs:     kubectl logs -f deploy/{{ include "celery-platform.fullname" . }}-worker-fast -n {{ .Release.Namespace }}
+  Upgrade:       helm upgrade {{ .Release.Name }} ./runtime/kubernetes/helm -n {{ .Release.Namespace }}
+  Uninstall:     helm uninstall {{ .Release.Name }} -n {{ .Release.Namespace }}

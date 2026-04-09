@@ -1,0 +1,78 @@
+{{/*
+============================================================
+servicemonitor.yaml — Prometheus Operator ServiceMonitor
+============================================================
+Maps to: components/observability/docker-compose.monitoring.yml
+If the cluster has Prometheus Operator, this auto-configures
+scraping of Celery, Redis, and RabbitMQ exporters.
+
+If NOT using Prometheus Operator, deploy the in-chart Prometheus
+stack via observability.enabled: true in values.yaml.
+*/}}
+{{- if and (include "celery-platform.observabilityEnabled" .) .Values.observability.prometheus.serviceMonitor.enabled }}
+
+# ── Celery Exporter ServiceMonitor ──
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-celery
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+    {{- with .Values.observability.prometheus.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: celery-exporter
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.observability.prometheus.serviceMonitor.interval }}
+
+# ── Redis Exporter ServiceMonitor ──
+{{- if .Values.observability.exporters.redis.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+    {{- with .Values.observability.prometheus.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: redis-exporter
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.observability.prometheus.serviceMonitor.interval }}
+{{- end }}
+
+# ── RabbitMQ Exporter ServiceMonitor ──
+{{- if and .Values.observability.exporters.rabbitmq.enabled (include "celery-platform.rabbitmqEnabled" .) }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-rabbitmq
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+    {{- with .Values.observability.prometheus.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: rabbitmq-exporter
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.observability.prometheus.serviceMonitor.interval }}
+{{- end }}
+
+{{- end }}

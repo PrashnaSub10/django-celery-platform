@@ -1,0 +1,9 @@
+# ============================================================
+# requirements/smb.txt — SMB/SFTP file transfer dependencies
+# ============================================================
+# Paired with Dockerfile.smb (which installs smbclient libs).
+# Only install in workers that access network file shares.
+# ============================================================
+
+pysmb==1.2.13
+paramiko==3.4.0

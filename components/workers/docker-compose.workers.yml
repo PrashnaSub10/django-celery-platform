@@ -1,0 +1,226 @@
+# ============================================================
+# docker-compose.workers.yml — Parametric worker template
+# ============================================================
+# This file is project-agnostic. It reads all configuration
+# from a celery-profile.env file shipped by each Django project.
+#
+# Usage:
+#   # Start workers for ProjectA (needs MSSQL):
+#   docker compose -f docker-compose.workers.yml \
+#     --env-file /path/to/ProjectA/celery-profile.env \
+#     --env-file .env.secrets up -d
+#
+#   # Start workers for ProjectB (needs SMB, runtime injection):
+#   EXTRA_PIP_PACKAGES="pysmb==1.2.13" \
+#   docker compose -f docker-compose.workers.yml \
+#     --env-file /path/to/ProjectB/celery-profile.env \
+#     --env-file .env.secrets up -d
+#
+# Prerequisites:
+#   - docker-compose.brokers.yml must be running (creates celery-broker-net)
+#   - Docker images must be built (celery-microservice:base, :mssql, etc.)
+# ============================================================
+
+# ── Shared worker configuration ────────────────────────────
+x-worker-base: &worker-base
+  image: ${WORKER_IMAGE:-celery-microservice:base}
+  entrypoint: ["/docker-entrypoint.sh"]
+  restart: always
+  working_dir: /app
+  volumes:
+    - worker_logs:/app/logs
+  environment:
+    - PYTHONPATH=/app
+    - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
+    - CONTAINER_ENV=true
+    - EXTRA_PIP_PACKAGES=${EXTRA_PIP_PACKAGES:-}
+    - REDIS_HOST=${REDIS_HOST:-celery-redis-shared}
+    - REDIS_PORT=${REDIS_PORT:-6379}
+    - REDIS_PASSWORD=${REDIS_PASSWORD}
+    - RABBITMQ_HOST=${RABBITMQ_HOST:-celery-rabbitmq-shared}
+    - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+    - RABBITMQ_USER=${RABBITMQ_USER}
+    - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+    - TZ=${TZ:-UTC}
+    # CODE_SOURCE controls how project code reaches /app.
+    # The docker-entrypoint.sh reads this and acts accordingly.
+    # A matching code-source overlay file is added by up.sh.
+    - CODE_SOURCE=${CODE_SOURCE:-bind}
+    - APP_GIT_URL=${APP_GIT_URL:-}
+    - APP_GIT_BRANCH=${APP_GIT_BRANCH:-}
+    - APP_PIP_PACKAGE=${APP_PIP_PACKAGE:-}
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+  networks:
+    - celery-broker-net
+
+# ── Services ────────────────────────────────────────────────
+services:
+
+  # ── Fast Worker (Redis + Gevent) ──────────────────────────
+  worker-fast:
+    <<: *worker-base
+    container_name: ${PROJECT_NAME:-app}-worker-fast
+    command: >
+      python3 -m celery -A ${CELERY_APP_REDIS:-config.celery_hybrid:app_redis} worker
+      --loglevel=${LOG_LEVEL:-info}
+      -P ${FAST_POOL:-gevent}
+      --concurrency=${FAST_CONCURRENCY:-100}
+      -Q ${CELERY_REDIS_QUEUE:-redis_queue}
+      --hostname=fast@%h
+      --max-tasks-per-child=${FAST_MAX_TASKS:-1000}
+      --max-memory-per-child=${FAST_MAX_MEMORY:-200000}
+      --prefetch-multiplier=${FAST_PREFETCH:-4}
+    environment:
+      - PYTHONPATH=/app
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
+      - CONTAINER_ENV=true
+      - EXTRA_PIP_PACKAGES=${EXTRA_PIP_PACKAGES:-}
+      - REDIS_HOST=${REDIS_HOST:-celery-redis-shared}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-celery-rabbitmq-shared}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - WAIT_FOR_REDIS=true
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -m celery -A ${CELERY_APP_REDIS:-config.celery_hybrid:app_redis} inspect ping -d fast@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ── Critical Worker (RabbitMQ + Solo) ─────────────────────
+  worker-critical:
+    <<: *worker-base
+    container_name: ${PROJECT_NAME:-app}-worker-critical
+    command: >
+      python3 -m celery -A ${CELERY_APP_RABBITMQ:-config.celery_hybrid:app_rabbitmq} worker
+      --loglevel=${LOG_LEVEL:-info}
+      -P ${CRITICAL_POOL:-solo}
+      --concurrency=${CRITICAL_CONCURRENCY:-1}
+      -Q ${CELERY_RABBITMQ_QUEUE:-email_queue}
+      --hostname=critical@%h
+      --max-tasks-per-child=${CRITICAL_MAX_TASKS:-500}
+      --max-memory-per-child=${CRITICAL_MAX_MEMORY:-300000}
+      --time-limit=${CRITICAL_TIME_LIMIT:-1800}
+      --soft-time-limit=${CRITICAL_SOFT_TIME_LIMIT:-1500}
+      --prefetch-multiplier=1
+    volumes:
+      - worker_logs:/app/logs
+      - ${MEDIA_VOLUME_PATH:-/dev/null}:/mnt/media
+    environment:
+      - PYTHONPATH=/app
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
+      - CONTAINER_ENV=true
+      - EXTRA_PIP_PACKAGES=${EXTRA_PIP_PACKAGES:-}
+      - REDIS_HOST=${REDIS_HOST:-celery-redis-shared}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-celery-rabbitmq-shared}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - WAIT_FOR_RABBITMQ=true
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -m celery -A ${CELERY_APP_RABBITMQ:-config.celery_hybrid:app_rabbitmq} inspect ping -d critical@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ── Celery Beat ───────────────────────────────────────────
+  celery-beat:
+    <<: *worker-base
+    container_name: ${PROJECT_NAME:-app}-beat
+    command: >
+      python3 -m celery -A ${CELERY_APP_REDIS:-config.celery_hybrid:app_redis} beat
+      --loglevel=${LOG_LEVEL:-info}
+      --pidfile=/tmp/celerybeat.pid
+      --schedule=/app/beat_data/celerybeat-schedule.db
+    volumes:
+      - beat_data:/app/beat_data
+    environment:
+      - PYTHONPATH=/app
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
+      - CONTAINER_ENV=true
+      - EXTRA_PIP_PACKAGES=${EXTRA_PIP_PACKAGES:-}
+      - REDIS_HOST=${REDIS_HOST:-celery-redis-shared}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - WAIT_FOR_REDIS=true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # ── Flower — Redis Monitor ───────────────────────────────
+  flower-redis:
+    <<: *worker-base
+    container_name: ${PROJECT_NAME:-app}-flower-redis
+    command: >
+      python3 -m celery -A ${CELERY_APP_REDIS:-config.celery_hybrid:app_redis} flower
+      --port=5555
+      --basic_auth=${FLOWER_USER:?FLOWER_USER missing}:${FLOWER_PASSWORD:?FLOWER_PASSWORD missing in .env.secrets}
+      --max-tasks=${FLOWER_MAX_TASKS:-10000}
+      --purge_offline_workers=${FLOWER_PURGE_OFFLINE:-3600}
+    ports:
+      - "127.0.0.1:${FLOWER_PORT_REDIS:-5555}:5555"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ── Flower — RabbitMQ Monitor ────────────────────────────
+  flower-rabbitmq:
+    <<: *worker-base
+    container_name: ${PROJECT_NAME:-app}-flower-rabbitmq
+    command: >
+      python3 -m celery -A ${CELERY_APP_RABBITMQ:-config.celery_hybrid:app_rabbitmq} flower
+      --port=5555
+      --basic_auth=${FLOWER_USER:?FLOWER_USER missing}:${FLOWER_PASSWORD:?FLOWER_PASSWORD missing in .env.secrets}
+      --max-tasks=${FLOWER_MAX_TASKS:-10000}
+    ports:
+      - "127.0.0.1:${FLOWER_PORT_RABBITMQ:-5556}:5555"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+# ── Volumes ─────────────────────────────────────────────────
+volumes:
+  worker_logs:
+    driver: local
+  beat_data:
+    driver: local
+
+# ── Network (connects to broker network) ────────────────────
+networks:
+  celery-broker-net:
+    external: true
+    name: celery-broker-net

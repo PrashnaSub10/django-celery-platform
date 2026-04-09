@@ -1,0 +1,421 @@
+# ============================================================
+# values.yaml — Django Celery Platform Helm Chart
+# ============================================================
+# Maps the platform's 6 configuration dimensions to Kubernetes-
+# native resources. Every value has a sensible default matching
+# the Docker Compose platform behaviour.
+#
+# Dimension mapping:
+#   MODE          → mode (controls which components are enabled)
+#   BROKER_MODE   → brokerMode (controls broker topology)
+#   WORKER_MODE   → workerMode (controls worker pool layout)
+#   SERVER_PROFILE → resources blocks per component
+#   CODE_SOURCE   → always "image" in Kubernetes
+#   RESULT_BACKEND → resultBackend
+# ============================================================
+
+# ── Global Settings ─────────────────────────────────────────
+
+# Deploy mode: minimal | standard | full
+# Controls which components are enabled (mirrors core/modes/*.yml)
+mode: standard
+
+# Broker strategy: redis | rabbitmq | hybrid | kafka
+brokerMode: redis
+
+# Worker topology: single | dual
+# dual requires brokerMode: hybrid
+workerMode: single
+
+# Result backend: redis | django-db | postgres | none
+resultBackend: redis
+
+# Namespace (created if createNamespace: true)
+namespace: celery-platform
+createNamespace: true
+
+# Global image pull secrets (for private registries)
+imagePullSecrets: []
+#  - name: my-registry-secret
+
+# ── Worker Image ────────────────────────────────────────────
+# This is YOUR application image — Django code baked in.
+# In Kubernetes, CODE_SOURCE is always "image".
+
+workerImage:
+  repository: celery-microservice
+  tag: base
+  pullPolicy: IfNotPresent
+
+# Django settings module injected into all worker pods
+django:
+  settingsModule: config.settings.production
+  allowedHosts: "*"
+  debug: false
+
+# ── Redis ───────────────────────────────────────────────────
+
+redis:
+  # Set enabled: false if using an external Redis (e.g. ElastiCache)
+  enabled: true
+  image:
+    repository: redis
+    tag: 7-alpine
+  password: ""  # REQUIRED — set via --set redis.password=xxx or secrets
+  port: 6379
+  maxMemory: 512mb
+  maxMemoryPolicy: allkeys-lru
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""  # Uses default StorageClass if empty
+  resources:
+    limits:
+      cpu: "1"
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+  # External Redis (when enabled: false)
+  external:
+    enabled: false
+    url: ""  # redis://:password@your-elasticache.amazonaws.com:6379/0
+
+# ── RabbitMQ ────────────────────────────────────────────────
+
+rabbitmq:
+  # Enabled when brokerMode is rabbitmq, hybrid, or full mode
+  enabled: true  # Overridden by mode/brokerMode logic in templates
+  image:
+    repository: rabbitmq
+    tag: 3-management-alpine
+  user: admin
+  password: ""  # REQUIRED — set via --set rabbitmq.password=xxx or secrets
+  port: 5672
+  managementPort: 15672
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+  resources:
+    limits:
+      cpu: "1"
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+  # External RabbitMQ (when enabled: false)
+  external:
+    enabled: false
+    url: ""  # amqp://user:pass@your-amazon-mq.amazonaws.com:5672/vhost
+
+# ── Kafka ───────────────────────────────────────────────────
+
+kafka:
+  # Enabled only when brokerMode: kafka or mode: full
+  enabled: false
+  image:
+    repository: bitnami/kafka
+    tag: "3.9"
+  port: 9092
+  numPartitions: 3
+  logRetentionHours: 168
+  messageMaxBytes: 1048576
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+  resources:
+    limits:
+      cpu: "2"
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  # External Kafka (e.g. Amazon MSK, Confluent Cloud)
+  external:
+    enabled: false
+    bootstrapServers: ""  # your-msk-cluster.amazonaws.com:9092
+
+# ── Worker: Fast (Redis) ───────────────────────────────────
+
+workerFast:
+  enabled: true
+  replicas: 1
+  pool: gevent
+  concurrency: 100
+  prefetchMultiplier: 4
+  maxTasksPerChild: 1000
+  maxMemoryPerChild: 200000
+  queue: redis_queue
+  celeryApp: config.celery_hybrid:app_redis
+  resources:
+    limits:
+      cpu: "2"
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  # Horizontal Pod Autoscaler (requires KEDA or Prometheus Adapter)
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 20
+    # Queue-depth scaling via KEDA ScaledObject
+    # Requires: KEDA operator installed in cluster
+    keda:
+      enabled: false
+      trigger: redis
+      listName: redis_queue
+      listLength: "50"  # Scale up when queue exceeds this length
+
+# ── Worker: Critical (RabbitMQ) ─────────────────────────────
+
+workerCritical:
+  # Enabled when brokerMode is rabbitmq or hybrid
+  enabled: true  # Overridden by brokerMode logic in templates
+  replicas: 1
+  pool: solo
+  concurrency: 1
+  prefetchMultiplier: 1
+  maxTasksPerChild: 500
+  maxMemoryPerChild: 300000
+  timeLimit: 1800
+  softTimeLimit: 1500
+  queue: rabbitmq_queue
+  celeryApp: config.celery_hybrid:app_rabbitmq
+  resources:
+    limits:
+      cpu: "2"
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    keda:
+      enabled: false
+      trigger: rabbitmq
+      queueName: rabbitmq_queue
+      queueLength: "10"
+
+# ── Worker: Kafka (Streaming) ──────────────────────────────
+
+workerKafka:
+  # Enabled only when brokerMode: kafka
+  enabled: false
+  replicas: 1
+  pool: prefork
+  concurrency: 4
+  prefetchMultiplier: 1
+  maxTasksPerChild: 500
+  maxMemoryPerChild: 300000
+  queue: kafka_queue
+  celeryApp: config.celery_hybrid:app_kafka
+  resources:
+    limits:
+      cpu: "2"
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 20
+    keda:
+      enabled: false
+      trigger: kafka
+      topic: kafka_queue
+      lagThreshold: "100"
+
+# ── Celery Beat ─────────────────────────────────────────────
+
+celeryBeat:
+  enabled: true
+  celeryApp: config.celery_hybrid:app_redis
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+
+# ── Flower ──────────────────────────────────────────────────
+
+flower:
+  redis:
+    enabled: true
+    port: 5555
+    celeryApp: config.celery_hybrid:app_redis
+  rabbitmq:
+    enabled: true  # Overridden by brokerMode
+    port: 5556
+    celeryApp: config.celery_hybrid:app_rabbitmq
+  hybrid:
+    enabled: false  # Enabled when workerMode: dual
+    port: 5557
+  kafka:
+    enabled: false  # Enabled when brokerMode: kafka
+    port: 5558
+    celeryApp: config.celery_hybrid:app_kafka
+
+  # Flower authentication
+  user: admin
+  password: ""  # REQUIRED
+  maxTasks: 10000
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# ── Gateway / Ingress ───────────────────────────────────────
+# In Kubernetes, the gateway is typically an Ingress resource
+# backed by an Ingress Controller (nginx-ingress, traefik, etc.)
+# rather than a standalone Nginx container.
+
+ingress:
+  enabled: true
+  className: nginx  # nginx | traefik | alb
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+    # nginx.ingress.kubernetes.io/rate-limit: "10"
+    # nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+  hosts:
+    - host: celery.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: celery-tls
+  #    hosts:
+  #      - celery.yourdomain.com
+
+# ── Observability ───────────────────────────────────────────
+
+observability:
+  # Controls whether observability components are deployed.
+  # Set to false if you have an existing monitoring stack.
+  enabled: true  # Overridden by mode: minimal → false
+
+  prometheus:
+    enabled: true
+    image:
+      repository: prom/prometheus
+      tag: latest
+    retentionTime: 15d
+    scrapeInterval: 15s
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: ""
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    # ServiceMonitor for Prometheus Operator integration
+    # If your cluster has Prometheus Operator, these auto-configure scraping
+    serviceMonitor:
+      enabled: false
+      interval: 15s
+      labels: {}
+
+  grafana:
+    enabled: true
+    image:
+      repository: grafana/grafana
+      tag: latest
+    adminPassword: ""  # REQUIRED
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: ""
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  alertmanager:
+    enabled: false  # Enabled in mode: full
+    image:
+      repository: prom/alertmanager
+      tag: latest
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+
+    # Alert routing
+    slack:
+      webhookUrl: ""
+    pagerduty:
+      integrationKey: ""
+
+  # Metric exporters
+  exporters:
+    redis:
+      enabled: true
+      image:
+        repository: oliver006/redis_exporter
+        tag: latest
+    rabbitmq:
+      enabled: true
+      image:
+        repository: kbudde/rabbitmq-exporter
+        tag: latest
+    celery:
+      enabled: true
+      image:
+        repository: danihodovic/celery-exporter
+        tag: latest
+    node:
+      enabled: true
+      image:
+        repository: prom/node-exporter
+        tag: latest
+
+# ── Common Labels ───────────────────────────────────────────
+
+commonLabels: {}
+  # team: platform
+  # environment: production
+
+# ── Pod Annotations ─────────────────────────────────────────
+
+podAnnotations: {}
+  # prometheus.io/scrape: "true"
+  # prometheus.io/port: "9808"
+
+# ── Tolerations, Affinity, NodeSelector ─────────────────────
+# Applied to all worker pods. Override per-component in the
+# component's section if needed.
+
+tolerations: []
+affinity: {}
+nodeSelector: {}
+
+# ── Service Account ─────────────────────────────────────────
+
+serviceAccount:
+  create: true
+  name: ""  # Defaults to release name
+  annotations: {}
+    # eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/celery

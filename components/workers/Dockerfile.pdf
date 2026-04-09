@@ -1,0 +1,32 @@
+# ============================================================
+# Dockerfile.pdf — Base + PDF/Image processing stack
+# ============================================================
+# For workers that generate PDFs, process images, or render HTML.
+# Includes: PyMuPDF, WeasyPrint, ReportLab, Pillow, HEIF support.
+# Pairs with requirements/pdf.txt.
+# Tag: celery-microservice:pdf
+# ============================================================
+FROM celery-microservice:base
+
+LABEL maintainer="django-celery-platform" \
+      description="Celery worker with PDF/Image processing support" \
+      version="3.1.0"
+
+# Install system libraries for PDF generation and image processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libmupdf-dev \
+    mupdf-tools \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
+    shared-mime-info \
+    libheif-dev \
+    libde265-dev \
+    libx265-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PDF/Image Python packages
+COPY requirements/pdf.txt /tmp/requirements/pdf.txt
+RUN pip install --no-cache-dir -r /tmp/requirements/pdf.txt && \
+    rm -rf /tmp/requirements

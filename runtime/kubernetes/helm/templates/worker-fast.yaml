@@ -1,0 +1,92 @@
+{{/*
+============================================================
+worker-fast.yaml — Fast Worker Deployment
+============================================================
+Maps to: components/workers/docker-compose.workers.yml (worker-fast)
+Always deployed. Uses gevent pool for high I/O concurrency.
+*/}}
+{{- if .Values.workerFast.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-worker-fast
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+    {{- include "celery-platform.selectorLabels" (dict "component" "worker-fast" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.workerFast.replicas }}
+  selector:
+    matchLabels:
+      {{- include "celery-platform.selectorLabels" (dict "component" "worker-fast" "context" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "celery-platform.selectorLabels" (dict "component" "worker-fast" "context" .) | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000  # celery user
+        fsGroup: 1000
+      containers:
+        - name: worker-fast
+          image: "{{ .Values.workerImage.repository }}:{{ .Values.workerImage.tag }}"
+          imagePullPolicy: {{ .Values.workerImage.pullPolicy }}
+          command:
+            - python3
+            - -m
+            - celery
+            - -A
+            - {{ .Values.workerFast.celeryApp }}
+            - worker
+            - --loglevel=info
+            - -P
+            - {{ .Values.workerFast.pool }}
+            - --concurrency={{ .Values.workerFast.concurrency }}
+            - -Q
+            - {{ .Values.workerFast.queue }}
+            - --hostname=fast@%h
+            - --max-tasks-per-child={{ .Values.workerFast.maxTasksPerChild }}
+            - --max-memory-per-child={{ .Values.workerFast.maxMemoryPerChild }}
+            - --prefetch-multiplier={{ .Values.workerFast.prefetchMultiplier }}
+          env:
+            {{- include "celery-platform.workerEnv" . | nindent 12 }}
+          readinessProbe:
+            exec:
+              command:
+                - python3
+                - -m
+                - celery
+                - -A
+                - {{ .Values.workerFast.celeryApp }}
+                - inspect
+                - ping
+                - -d
+                - fast@$HOSTNAME
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            {{- toYaml .Values.workerFast.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

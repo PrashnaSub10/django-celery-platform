@@ -1,0 +1,26 @@
+name: Test Gateway
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'components/gateway/**'
+      - '.github/workflows/test-gateway.yml'
+  pull_request:
+    paths:
+      - 'components/gateway/**'
+      - '.github/workflows/test-gateway.yml'
+
+jobs:
+  smoke-test:
+    name: Gateway Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make smoke test executable
+        run: chmod +x components/gateway/tests/smoke_test.sh
+
+      - name: Run gateway smoke test
+        run: bash components/gateway/tests/smoke_test.sh

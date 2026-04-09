@@ -1,0 +1,15 @@
+# ============================================================
+# docker-compose.dual-workers.code-bind.yml — CODE_SOURCE=bind for WORKER_MODE=dual
+# ============================================================
+# Loaded by up.sh when CODE_SOURCE=bind AND WORKER_MODE=dual.
+# Adds APP_PATH bind-mounts to the dual-mode specific services.
+# ============================================================
+
+services:
+  flower-hybrid:
+    volumes:
+      - ${APP_PATH}:/app
+
+  worker-hybrid-beat:
+    volumes:
+      - ${APP_PATH}:/app

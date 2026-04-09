@@ -1,0 +1,15 @@
+# ============================================================
+# docker-compose.asgi.code-git.yml — CODE_SOURCE=git for ASGI_MODE=true
+# ============================================================
+# Loaded by up.sh when CODE_SOURCE=git AND ASGI_MODE=true.
+# Adds the git_code volume mount to the Daphne ASGI service.
+# ============================================================
+
+services:
+  django-asgi:
+    volumes:
+      - git_code:/app
+
+volumes:
+  git_code:
+    driver: local

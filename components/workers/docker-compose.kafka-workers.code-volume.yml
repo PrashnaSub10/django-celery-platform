@@ -1,0 +1,24 @@
+# ============================================================
+# docker-compose.kafka-workers.code-volume.yml — CODE_SOURCE=volume overlay
+# ============================================================
+# Loaded automatically by up.sh when BROKER_MODE=kafka and
+# CODE_SOURCE=volume.  Mounts the named Docker volume into
+# Kafka worker containers at /app.
+# ============================================================
+
+services:
+  worker-kafka:
+    volumes:
+      - ${APP_VOLUME_NAME:?APP_VOLUME_NAME must be set when CODE_SOURCE=volume}:/app
+
+  flower-kafka:
+    volumes:
+      - ${APP_VOLUME_NAME}:/app
+
+  celery-beat-kafka:
+    volumes:
+      - ${APP_VOLUME_NAME}:/app
+
+volumes:
+  ${APP_VOLUME_NAME}:
+    external: true

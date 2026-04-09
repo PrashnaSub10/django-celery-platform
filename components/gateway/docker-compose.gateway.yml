@@ -1,0 +1,65 @@
+# ============================================================
+# docker-compose.gateway.yml — Gateway Layer
+# ============================================================
+# Contains Nginx proxy, mTLS configurations, and rate limiting.
+# ============================================================
+
+services:
+  # ── Nginx (reverse proxy) ────────────────────────────────
+  nginx:
+    image: nginx:stable-alpine
+    container_name: celery-nginx-shared
+    restart: always
+    volumes:
+      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    environment:
+      - DJANGO_UPSTREAM_HOST=${DJANGO_UPSTREAM_HOST:-host.docker.internal}
+      - DJANGO_UPSTREAM_PORT=${DJANGO_UPSTREAM_PORT:-9845}
+      - DJANGO_ASGI_HOST=${DJANGO_ASGI_HOST:-host.docker.internal}
+      - DJANGO_ASGI_PORT=${DJANGO_ASGI_PORT:-9501}
+      - NGINX_CLIENT_MAX_BODY_SIZE=${NGINX_CLIENT_MAX_BODY_SIZE:-100M}
+      - NGINX_RATE_LIMIT=${NGINX_RATE_LIMIT:-10r/s}
+    ports:
+      - "${NGINX_HTTP_PORT:-8080}:80"
+      - "${NGINX_HTTPS_PORT:-8443}:443"
+      # Port 8080 inside the container is stub_status — NOT published to host
+      # nginx-exporter reaches it via the internal Docker network
+    # depends_on is intentionally omitted here.
+    # When running in isolation (contributor local loop), Redis and RabbitMQ
+    # are not present. When running via core/up.sh, Docker Compose merges all
+    # four compose files into one project and startup ordering is handled by
+    # the broker healthchecks defined in components/brokers/docker-compose.brokers.yml.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - celery-broker-net
+
+# ── Volumes ─────────────────────────────────────────────────
+volumes:
+  nginx_logs:
+    driver: local
+
+# ── Network ─────────────────────────────────────────────────
+networks:
+  celery-broker-net:
+    external: true
+    name: celery-broker-net

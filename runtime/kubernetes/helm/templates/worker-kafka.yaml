@@ -1,0 +1,82 @@
+{{/*
+============================================================
+worker-kafka.yaml — Kafka Worker Deployment
+============================================================
+Maps to: components/workers/docker-compose.kafka-workers.yml
+Deployed only when brokerMode: kafka.
+*/}}
+{{- if and (include "celery-platform.kafkaEnabled" .) .Values.workerKafka.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-worker-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+    {{- include "celery-platform.selectorLabels" (dict "component" "worker-kafka" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.workerKafka.replicas }}
+  selector:
+    matchLabels:
+      {{- include "celery-platform.selectorLabels" (dict "component" "worker-kafka" "context" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "celery-platform.selectorLabels" (dict "component" "worker-kafka" "context" .) | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: worker-kafka
+          image: "{{ .Values.workerImage.repository }}:{{ .Values.workerImage.tag }}"
+          imagePullPolicy: {{ .Values.workerImage.pullPolicy }}
+          command:
+            - python3
+            - -m
+            - celery
+            - -A
+            - {{ .Values.workerKafka.celeryApp }}
+            - worker
+            - --loglevel=info
+            - -P
+            - {{ .Values.workerKafka.pool }}
+            - --concurrency={{ .Values.workerKafka.concurrency }}
+            - -Q
+            - {{ .Values.workerKafka.queue }}
+            - --hostname=streaming@%h
+            - --max-tasks-per-child={{ .Values.workerKafka.maxTasksPerChild }}
+            - --max-memory-per-child={{ .Values.workerKafka.maxMemoryPerChild }}
+            - --prefetch-multiplier={{ .Values.workerKafka.prefetchMultiplier }}
+          env:
+            {{- include "celery-platform.workerEnv" . | nindent 12 }}
+            - name: WAIT_FOR_KAFKA
+              value: "true"
+          readinessProbe:
+            exec:
+              command:
+                - python3
+                - -m
+                - celery
+                - -A
+                - {{ .Values.workerKafka.celeryApp }}
+                - inspect
+                - ping
+                - -d
+                - streaming@$HOSTNAME
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            {{- toYaml .Values.workerKafka.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,20 @@
+# ============================================================
+# docker-compose.dual-workers.code-git.yml — CODE_SOURCE=git for WORKER_MODE=dual
+# ============================================================
+# Loaded by up.sh when CODE_SOURCE=git AND WORKER_MODE=dual.
+# Adds the git_code volume mount to the dual-mode specific services.
+# The volume is declared in docker-compose.workers.code-git.yml.
+# ============================================================
+
+services:
+  flower-hybrid:
+    volumes:
+      - git_code:/app
+
+  worker-hybrid-beat:
+    volumes:
+      - git_code:/app
+
+volumes:
+  git_code:
+    driver: local

@@ -1,0 +1,38 @@
+# ============================================================
+# docker-compose.workers.code-bind.yml — CODE_SOURCE=bind overlay
+# ============================================================
+# Loaded automatically by up.sh when CODE_SOURCE=bind (default).
+#
+# Bind-mounts APP_PATH from the Docker host into every worker
+# container at /app.  Use when your Django project runs directly
+# on the Docker host:
+#
+#   • systemd service (gunicorn, uvicorn) on bare metal or a VM
+#   • Local development — code changes are reflected immediately
+#     without rebuilding the image.
+#
+# Set in celery-profile.env:
+#   CODE_SOURCE=bind
+#   APP_PATH=/absolute/path/to/your/django-project
+# ============================================================
+
+services:
+  worker-fast:
+    volumes:
+      - ${APP_PATH:?APP_PATH must be set in celery-profile.env when CODE_SOURCE=bind}:/app
+
+  worker-critical:
+    volumes:
+      - ${APP_PATH}:/app
+
+  celery-beat:
+    volumes:
+      - ${APP_PATH}:/app
+
+  flower-redis:
+    volumes:
+      - ${APP_PATH}:/app
+
+  flower-rabbitmq:
+    volumes:
+      - ${APP_PATH}:/app

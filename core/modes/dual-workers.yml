@@ -1,0 +1,15 @@
+# ============================================================
+# dual-workers.yml — Dual-worker mode service overrides
+# ============================================================
+# Loaded by up.sh when WORKER_MODE=dual alongside the base
+# docker-compose.workers.yml and docker-compose.dual-workers.yml.
+#
+# Scales celery-beat to 0 so that worker-hybrid-beat from
+# docker-compose.dual-workers.yml is the sole Beat scheduler.
+# Running two Beat processes against the same schedule database
+# causes duplicate task execution.
+# ============================================================
+
+services:
+  celery-beat:
+    scale: 0

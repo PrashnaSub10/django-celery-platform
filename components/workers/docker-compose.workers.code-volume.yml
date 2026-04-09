@@ -1,0 +1,55 @@
+# ============================================================
+# docker-compose.workers.code-volume.yml — CODE_SOURCE=volume overlay
+# ============================================================
+# Loaded automatically by up.sh when CODE_SOURCE=volume.
+#
+# Mounts a named Docker volume at /app in every worker container.
+# The volume must already contain your Django project code and must
+# be declared external (created outside this compose stack — typically
+# by your Django application's own compose stack).
+#
+# Use when your Django project runs in Docker and shares a code
+# volume with the platform workers:
+#
+#   # In your Django app's docker-compose.yml:
+#   services:
+#     django:
+#       volumes:
+#         - app_code:/app
+#   volumes:
+#     app_code:
+#
+#   # Then in celery-profile.env:
+#   CODE_SOURCE=volume
+#   APP_VOLUME_NAME=app_code
+#
+# Note: the celery workers need READ access to the volume.
+# Ensure the volume's file ownership is compatible with the
+# non-root 'celery' user inside the worker image.
+# ============================================================
+
+services:
+  worker-fast:
+    volumes:
+      - app_code:/app
+
+  worker-critical:
+    volumes:
+      - app_code:/app
+
+  celery-beat:
+    volumes:
+      - app_code:/app
+
+  flower-redis:
+    volumes:
+      - app_code:/app
+
+  flower-rabbitmq:
+    volumes:
+      - app_code:/app
+
+volumes:
+  app_code:
+    external: true
+    name: ${APP_VOLUME_NAME:?APP_VOLUME_NAME must be set in celery-profile.env when CODE_SOURCE=volume}

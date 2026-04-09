@@ -1,0 +1,249 @@
+{{/*
+============================================================
+flower.yaml — Flower Monitoring Deployments + Services
+============================================================
+Maps to: flower-redis, flower-rabbitmq, flower-hybrid, flower-kafka
+from the various docker-compose.*.yml files.
+Each Flower instance monitors one broker's workers.
+*/}}
+
+{{/* ── Flower Redis ────────────────────────────────────── */}}
+{{- if .Values.flower.redis.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-flower-redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+    {{- include "celery-platform.selectorLabels" (dict "component" "flower-redis" "context" .) | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "celery-platform.selectorLabels" (dict "component" "flower-redis" "context" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "celery-platform.selectorLabels" (dict "component" "flower-redis" "context" .) | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: flower
+          image: "{{ .Values.workerImage.repository }}:{{ .Values.workerImage.tag }}"
+          imagePullPolicy: {{ .Values.workerImage.pullPolicy }}
+          command:
+            - python3
+            - -m
+            - celery
+            - -A
+            - {{ .Values.flower.redis.celeryApp }}
+            - flower
+            - --port={{ .Values.flower.redis.port }}
+            - --basic_auth=$(FLOWER_USER):$(FLOWER_PASSWORD)
+            - --max-tasks={{ .Values.flower.maxTasks }}
+          env:
+            {{- include "celery-platform.workerEnv" . | nindent 12 }}
+            - name: FLOWER_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "celery-platform.fullname" . }}-secrets
+                  key: flower-user
+            - name: FLOWER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "celery-platform.fullname" . }}-secrets
+                  key: flower-password
+          ports:
+            - containerPort: {{ .Values.flower.redis.port }}
+              name: flower
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: {{ .Values.flower.redis.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.flower.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-flower-redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.flower.redis.port }}
+      targetPort: flower
+      name: flower
+  selector:
+    {{- include "celery-platform.selectorLabels" (dict "component" "flower-redis" "context" .) | nindent 4 }}
+{{- end }}
+
+{{/* ── Flower RabbitMQ ─────────────────────────────────── */}}
+{{- if and .Values.flower.rabbitmq.enabled (include "celery-platform.rabbitmqEnabled" .) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-flower-rabbitmq
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+    {{- include "celery-platform.selectorLabels" (dict "component" "flower-rabbitmq" "context" .) | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "celery-platform.selectorLabels" (dict "component" "flower-rabbitmq" "context" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "celery-platform.selectorLabels" (dict "component" "flower-rabbitmq" "context" .) | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: flower
+          image: "{{ .Values.workerImage.repository }}:{{ .Values.workerImage.tag }}"
+          imagePullPolicy: {{ .Values.workerImage.pullPolicy }}
+          command:
+            - python3
+            - -m
+            - celery
+            - -A
+            - {{ .Values.flower.rabbitmq.celeryApp }}
+            - flower
+            - --port={{ .Values.flower.rabbitmq.port }}
+            - --basic_auth=$(FLOWER_USER):$(FLOWER_PASSWORD)
+            - --max-tasks={{ .Values.flower.maxTasks }}
+          env:
+            {{- include "celery-platform.workerEnv" . | nindent 12 }}
+            - name: FLOWER_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "celery-platform.fullname" . }}-secrets
+                  key: flower-user
+            - name: FLOWER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "celery-platform.fullname" . }}-secrets
+                  key: flower-password
+          ports:
+            - containerPort: {{ .Values.flower.rabbitmq.port }}
+              name: flower
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: {{ .Values.flower.rabbitmq.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.flower.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-flower-rabbitmq
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.flower.rabbitmq.port }}
+      targetPort: flower
+      name: flower
+  selector:
+    {{- include "celery-platform.selectorLabels" (dict "component" "flower-rabbitmq" "context" .) | nindent 4 }}
+{{- end }}
+
+{{/* ── Flower Kafka ────────────────────────────────────── */}}
+{{- if and .Values.flower.kafka.enabled (include "celery-platform.kafkaEnabled" .) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-flower-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+    {{- include "celery-platform.selectorLabels" (dict "component" "flower-kafka" "context" .) | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "celery-platform.selectorLabels" (dict "component" "flower-kafka" "context" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "celery-platform.selectorLabels" (dict "component" "flower-kafka" "context" .) | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: flower
+          image: "{{ .Values.workerImage.repository }}:{{ .Values.workerImage.tag }}"
+          imagePullPolicy: {{ .Values.workerImage.pullPolicy }}
+          command:
+            - python3
+            - -m
+            - celery
+            - -A
+            - {{ .Values.flower.kafka.celeryApp }}
+            - flower
+            - --port={{ .Values.flower.kafka.port }}
+            - --basic_auth=$(FLOWER_USER):$(FLOWER_PASSWORD)
+            - --max-tasks={{ .Values.flower.maxTasks }}
+          env:
+            {{- include "celery-platform.workerEnv" . | nindent 12 }}
+            - name: FLOWER_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "celery-platform.fullname" . }}-secrets
+                  key: flower-user
+            - name: FLOWER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "celery-platform.fullname" . }}-secrets
+                  key: flower-password
+          ports:
+            - containerPort: {{ .Values.flower.kafka.port }}
+              name: flower
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: {{ .Values.flower.kafka.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.flower.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-flower-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.flower.kafka.port }}
+      targetPort: flower
+      name: flower
+  selector:
+    {{- include "celery-platform.selectorLabels" (dict "component" "flower-kafka" "context" .) | nindent 4 }}
+{{- end }}

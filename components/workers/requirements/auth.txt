@@ -1,0 +1,28 @@
+# ============================================================
+# requirements/auth.txt — REMOVED
+# ============================================================
+# This file previously contained project-specific authentication
+# dependencies (PyJWT, bcrypt, argon2-cffi, cryptography, pyotp).
+#
+# Those packages belong to the CONSUMING Django project, not to
+# this infrastructure platform. Per the Open Source Commitment
+# (docs/OS_Commitment.md), celery-stack is a generic runtime
+# environment — it does not own application-layer dependencies.
+#
+# HOW TO INJECT PROJECT AUTH DEPENDENCIES AT RUNTIME:
+# ----------------------------------------------------
+# Option A — via celery-profile.env (recommended):
+#   EXTRA_PIP_PACKAGES=PyJWT==2.12.1 argon2-cffi==25.1.0
+#
+# Option B — via a mounted requirements file:
+#   Add to your project root: requirements_celery.txt
+#   The docker-entrypoint.sh will auto-install it on startup.
+#
+# Option C — build a custom image extending celery-microservice:base:
+#   FROM celery-microservice:base
+#   COPY requirements_auth.txt /tmp/
+#   RUN pip install --no-cache-dir -r /tmp/requirements_auth.txt
+#
+# This file is intentionally left as a placeholder so the
+# requirements/ directory structure remains self-documenting.
+# ============================================================

@@ -1,0 +1,48 @@
+apiVersion: v2
+name: django-celery-platform
+description: >-
+  A composable, production-ready infrastructure platform for running
+  Django + Celery workers on Kubernetes. Provides brokers, workers,
+  gateway, and observability via Helm.
+type: application
+version: 0.1.0
+appVersion: "3.1.0"
+kubeVersion: ">=1.28.0-0"
+
+keywords:
+  - django
+  - celery
+  - redis
+  - rabbitmq
+  - kafka
+  - worker
+  - task-queue
+  - microservices
+
+home: https://github.com/your-org/django-celery-platform
+sources:
+  - https://github.com/your-org/django-celery-platform
+
+maintainers:
+  - name: Platform Team
+    email: platform@yourdomain.com
+
+dependencies:
+  # Uncomment to use Bitnami subcharts instead of in-chart templates.
+  # When using subcharts, disable the in-chart broker templates via
+  # values.yaml: redis.enabled: false, rabbitmq.enabled: false, etc.
+  #
+  # - name: redis
+  #   version: "~18.x"
+  #   repository: "https://charts.bitnami.com/bitnami"
+  #   condition: redis.external.enabled == false
+  #
+  # - name: rabbitmq
+  #   version: "~13.x"
+  #   repository: "https://charts.bitnami.com/bitnami"
+  #   condition: rabbitmq.external.enabled == false
+  #
+  # - name: kafka
+  #   version: "~28.x"
+  #   repository: "https://charts.bitnami.com/bitnami"
+  #   condition: kafka.enabled

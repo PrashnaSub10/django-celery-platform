@@ -1,0 +1,11 @@
+# ============================================================
+# docker-compose.asgi.code-bind.yml — CODE_SOURCE=bind for ASGI_MODE=true
+# ============================================================
+# Loaded by up.sh when CODE_SOURCE=bind AND ASGI_MODE=true.
+# Adds APP_PATH bind-mount to the Daphne ASGI service.
+# ============================================================
+
+services:
+  django-asgi:
+    volumes:
+      - ${APP_PATH}:/app

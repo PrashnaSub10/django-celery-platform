@@ -1,0 +1,24 @@
+# ============================================================
+# docker-compose.kafka-workers.code-git.yml — CODE_SOURCE=git overlay
+# ============================================================
+# Loaded automatically by up.sh when BROKER_MODE=kafka and
+# CODE_SOURCE=git.  Creates a named volume for the git clone
+# and mounts it into Kafka worker containers at /app.
+# ============================================================
+
+services:
+  worker-kafka:
+    volumes:
+      - git_code:/app
+
+  flower-kafka:
+    volumes:
+      - git_code:/app
+
+  celery-beat-kafka:
+    volumes:
+      - git_code:/app
+
+volumes:
+  git_code:
+    driver: local

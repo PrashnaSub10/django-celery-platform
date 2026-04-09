@@ -1,0 +1,51 @@
+# ============================================================
+# Dockerfile.full — Kitchen-sink image (legacy compatibility)
+# ============================================================
+# Includes everything: ODBC 18, Samba, PDF stack, all Python deps.
+# Use this ONLY for legacy projects that haven't been profiled yet.
+# New projects should pick a specific tag: :base, :mssql, :smb, :pdf
+# Tag: celery-microservice:full
+# ============================================================
+FROM celery-microservice:pdf
+
+LABEL maintainer="django-celery-platform" \
+      description="Celery worker — full deps (legacy compatibility)" \
+      version="3.1.0"
+
+USER root
+
+# Add ODBC Driver 18 (from Dockerfile.mssql)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    unixodbc-dev \
+    unixodbc \
+    gnupg2 \
+    && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+       -o /tmp/microsoft.asc \
+    && gpg --dearmor < /tmp/microsoft.asc > /usr/share/keyrings/microsoft-prod.gpg \
+    && rm /tmp/microsoft.asc \
+    && curl -fsSL https://packages.microsoft.com/config/debian/12/prod.list \
+       > /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \
+    && apt-get purge -y gnupg2 \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Samba client (from Dockerfile.smb)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    smbclient \
+    libsmbclient-dev \
+    openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install ALL split requirements
+COPY requirements/mssql.txt /tmp/requirements/mssql.txt
+COPY requirements/smb.txt   /tmp/requirements/smb.txt
+COPY requirements/auth.txt  /tmp/requirements/auth.txt
+RUN pip install --no-cache-dir \
+    -r /tmp/requirements/mssql.txt \
+    -r /tmp/requirements/smb.txt \
+    -r /tmp/requirements/auth.txt && \
+    rm -rf /tmp/requirements
+
+USER celery

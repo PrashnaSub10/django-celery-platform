@@ -1,0 +1,52 @@
+{{/*
+============================================================
+ingress.yaml — Ingress resource
+============================================================
+Maps to: components/gateway/docker-compose.gateway.yml
+In Kubernetes, the gateway is an Ingress resource backed by
+an Ingress Controller (nginx-ingress, traefik, ALB, etc.)
+rather than a standalone Nginx container.
+*/}}
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "celery-platform.fullname" $ }}-flower-redis
+                port:
+                  number: {{ $.Values.flower.redis.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}

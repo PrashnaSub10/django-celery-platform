@@ -1,0 +1,52 @@
+# ============================================================
+# Dockerfile.base — Minimal Celery worker image
+# ============================================================
+# Contains only: Python 3.13, Celery, Redis, Kombu, Gevent, Flower
+# Use this for workers that don't need ODBC, SMB, or PDF libs.
+# Tag: celery-microservice:base
+# ============================================================
+FROM python:3.13-slim
+
+LABEL maintainer="django-celery-platform" \
+      description="Base Celery worker — core dependencies only" \
+      version="3.1.0"
+
+WORKDIR /app
+
+# Minimal system deps: build tools + curl for healthchecks + git for CODE_SOURCE=git
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    make \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libffi-dev \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pin pip to a known-good version for reproducible builds.
+# Upgrade pip separately before installing requirements so the pinned
+# version is used for all subsequent installs.
+RUN pip install --no-cache-dir "pip==25.1"
+
+# Copy split requirements
+COPY requirements/core.txt /tmp/requirements/core.txt
+RUN pip install --no-cache-dir -r /tmp/requirements/core.txt && \
+    rm -rf /tmp/requirements
+
+# Copy entrypoint for runtime dep injection
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+# Run as a non-root user to reduce container attack surface.
+# Create the user before the USER switch and own /app so that
+# CODE_SOURCE=git (git clone) and CODE_SOURCE=image (COPY) can
+# write to /app without root.  Bind-mount and named-volume modes
+# overlay /app at runtime, so ownership there is host-controlled.
+RUN useradd --no-create-home --shell /bin/false celery && \
+    chown celery:celery /app
+USER celery
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["celery", "--help"]

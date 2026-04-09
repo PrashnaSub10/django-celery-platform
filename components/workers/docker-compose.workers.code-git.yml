@@ -1,0 +1,49 @@
+# ============================================================
+# docker-compose.workers.code-git.yml — CODE_SOURCE=git overlay
+# ============================================================
+# Loaded automatically by up.sh when CODE_SOURCE=git.
+#
+# Mounts a named local volume at /app to persist the cloned
+# repository across container restarts and recreations.
+#
+# On first start: docker-entrypoint.sh runs `git clone APP_GIT_URL`.
+# On subsequent starts: it runs `git pull --ff-only` instead.
+#
+# Use when your Django project is hosted in a git repository and
+# you want the workers to always run the latest committed code —
+# useful for cloud deployments, CI/CD pipelines, or any environment
+# where the host filesystem is not available.
+#
+# Set in celery-profile.env:
+#   CODE_SOURCE=git
+#   APP_GIT_URL=https://github.com/your-org/your-django-project.git
+#   APP_GIT_BRANCH=main          # optional; defaults to repo default branch
+#
+# For private repositories, inject credentials via:
+#   APP_GIT_URL=https://token:${GITHUB_TOKEN}@github.com/your-org/repo.git
+# ============================================================
+
+services:
+  worker-fast:
+    volumes:
+      - git_code:/app
+
+  worker-critical:
+    volumes:
+      - git_code:/app
+
+  celery-beat:
+    volumes:
+      - git_code:/app
+
+  flower-redis:
+    volumes:
+      - git_code:/app
+
+  flower-rabbitmq:
+    volumes:
+      - git_code:/app
+
+volumes:
+  git_code:
+    driver: local

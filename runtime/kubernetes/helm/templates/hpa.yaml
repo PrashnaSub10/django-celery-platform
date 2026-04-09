@@ -1,0 +1,189 @@
+{{/*
+============================================================
+hpa.yaml — Horizontal Pod Autoscaler / KEDA ScaledObject
+============================================================
+Queue-depth-based autoscaling for worker pods.
+
+Two modes:
+  1. Standard HPA (CPU/memory) — works out of the box.
+  2. KEDA ScaledObject (queue depth) — requires KEDA operator.
+     KEDA watches the broker queue length and scales workers
+     up/down based on pending task count.
+
+Maps to: no Compose equivalent (Compose uses `--scale` manually)
+This is a key Kubernetes-native advantage over Docker Compose.
+*/}}
+
+{{/* ── Worker Fast HPA ────────────────────────────────── */}}
+{{- if and .Values.workerFast.enabled .Values.workerFast.autoscaling.enabled }}
+
+{{- if .Values.workerFast.autoscaling.keda.enabled }}
+# KEDA ScaledObject — scales based on Redis queue depth
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-worker-fast
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "celery-platform.fullname" . }}-worker-fast
+  minReplicaCount: {{ .Values.workerFast.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.workerFast.autoscaling.maxReplicas }}
+  pollingInterval: 15
+  cooldownPeriod: 60
+  triggers:
+    - type: redis
+      metadata:
+        address: {{ include "celery-platform.fullname" . }}-redis:{{ .Values.redis.port }}
+        listName: {{ .Values.workerFast.autoscaling.keda.listName }}
+        listLength: {{ .Values.workerFast.autoscaling.keda.listLength | quote }}
+      authenticationRef:
+        name: {{ include "celery-platform.fullname" . }}-redis-auth
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-redis-auth
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: {{ include "celery-platform.fullname" . }}-secrets
+      key: redis-password
+
+{{- else }}
+# Standard HPA — scales based on CPU utilisation
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-worker-fast
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "celery-platform.fullname" . }}-worker-fast
+  minReplicas: {{ .Values.workerFast.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.workerFast.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+{{- end }}
+{{- end }}
+
+{{/* ── Worker Critical HPA ────────────────────────────── */}}
+{{- if and .Values.workerCritical.enabled .Values.workerCritical.autoscaling.enabled (include "celery-platform.rabbitmqEnabled" .) }}
+
+{{- if .Values.workerCritical.autoscaling.keda.enabled }}
+# KEDA ScaledObject — scales based on RabbitMQ queue depth
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-worker-critical
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "celery-platform.fullname" . }}-worker-critical
+  minReplicaCount: {{ .Values.workerCritical.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.workerCritical.autoscaling.maxReplicas }}
+  pollingInterval: 15
+  cooldownPeriod: 120
+  triggers:
+    - type: rabbitmq
+      metadata:
+        host: amqp://{{ .Values.rabbitmq.user }}:$(RABBITMQ_PASSWORD)@{{ include "celery-platform.fullname" . }}-rabbitmq:{{ .Values.rabbitmq.port }}/
+        queueName: {{ .Values.workerCritical.autoscaling.keda.queueName }}
+        queueLength: {{ .Values.workerCritical.autoscaling.keda.queueLength | quote }}
+
+{{- else }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-worker-critical
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "celery-platform.fullname" . }}-worker-critical
+  minReplicas: {{ .Values.workerCritical.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.workerCritical.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+{{- end }}
+{{- end }}
+
+{{/* ── Worker Kafka HPA ───────────────────────────────── */}}
+{{- if and .Values.workerKafka.enabled .Values.workerKafka.autoscaling.enabled (include "celery-platform.kafkaEnabled" .) }}
+
+{{- if .Values.workerKafka.autoscaling.keda.enabled }}
+# KEDA ScaledObject — scales based on Kafka consumer lag
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-worker-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "celery-platform.fullname" . }}-worker-kafka
+  minReplicaCount: {{ .Values.workerKafka.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.workerKafka.autoscaling.maxReplicas }}
+  pollingInterval: 15
+  cooldownPeriod: 60
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: {{ include "celery-platform.fullname" . }}-kafka:{{ .Values.kafka.port }}
+        consumerGroup: celery
+        topic: {{ .Values.workerKafka.autoscaling.keda.topic }}
+        lagThreshold: {{ .Values.workerKafka.autoscaling.keda.lagThreshold | quote }}
+
+{{- else }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-worker-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "celery-platform.fullname" . }}-worker-kafka
+  minReplicas: {{ .Values.workerKafka.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.workerKafka.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+{{- end }}
+{{- end }}

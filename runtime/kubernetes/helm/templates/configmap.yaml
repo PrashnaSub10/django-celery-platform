@@ -1,0 +1,57 @@
+{{/*
+============================================================
+configmap.yaml — Platform configuration
+============================================================
+Non-secret environment variables shared across all pods.
+Maps directly to .docker.env in the Docker Compose runtime.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+data:
+  # ── Platform Dimensions ──
+  MODE: {{ .Values.mode | quote }}
+  BROKER_MODE: {{ .Values.brokerMode | quote }}
+  WORKER_MODE: {{ .Values.workerMode | quote }}
+  RESULT_BACKEND: {{ .Values.resultBackend | quote }}
+
+  # ── Django ──
+  DJANGO_SETTINGS_MODULE: {{ .Values.django.settingsModule | quote }}
+  DJANGO_ALLOWED_HOSTS: {{ .Values.django.allowedHosts | quote }}
+  DJANGO_DEBUG: {{ .Values.django.debug | quote }}
+
+  # ── Redis ──
+  REDIS_HOST: {{ include "celery-platform.fullname" . }}-redis
+  REDIS_PORT: {{ .Values.redis.port | quote }}
+
+  # ── RabbitMQ ──
+  {{- if include "celery-platform.rabbitmqEnabled" . }}
+  RABBITMQ_HOST: {{ include "celery-platform.fullname" . }}-rabbitmq
+  RABBITMQ_PORT: {{ .Values.rabbitmq.port | quote }}
+  RABBITMQ_USER: {{ .Values.rabbitmq.user | quote }}
+  {{- end }}
+
+  # ── Kafka ──
+  {{- if include "celery-platform.kafkaEnabled" . }}
+  KAFKA_HOST: {{ include "celery-platform.fullname" . }}-kafka
+  KAFKA_PORT: {{ .Values.kafka.port | quote }}
+  {{- end }}
+
+  # ── Worker: Fast ──
+  CELERY_FAST_WORKER_CONCURRENCY: {{ .Values.workerFast.concurrency | quote }}
+  CELERY_FAST_WORKER_POOL: {{ .Values.workerFast.pool | quote }}
+  CELERY_FAST_WORKER_MAX_TASKS_PER_CHILD: {{ .Values.workerFast.maxTasksPerChild | quote }}
+
+  # ── Worker: Critical ──
+  {{- if include "celery-platform.rabbitmqEnabled" . }}
+  CELERY_CRITICAL_WORKER_CONCURRENCY: {{ .Values.workerCritical.concurrency | quote }}
+  CELERY_CRITICAL_WORKER_POOL: {{ .Values.workerCritical.pool | quote }}
+  CELERY_CRITICAL_WORKER_MAX_TASKS_PER_CHILD: {{ .Values.workerCritical.maxTasksPerChild | quote }}
+  {{- end }}
+
+  # ── Flower ──
+  FLOWER_MAX_TASKS: {{ .Values.flower.maxTasks | quote }}

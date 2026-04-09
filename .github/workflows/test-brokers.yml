@@ -1,0 +1,26 @@
+name: Test Brokers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'components/brokers/**'
+      - '.github/workflows/test-brokers.yml'
+  pull_request:
+    paths:
+      - 'components/brokers/**'
+      - '.github/workflows/test-brokers.yml'
+
+jobs:
+  smoke-test:
+    name: Brokers Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make smoke test executable
+        run: chmod +x components/brokers/tests/smoke_test.sh
+
+      - name: Run brokers smoke test
+        run: bash components/brokers/tests/smoke_test.sh

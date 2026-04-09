@@ -1,0 +1,20 @@
+# ============================================================
+# docker-compose.kafka-workers.code-bind.yml — CODE_SOURCE=bind overlay
+# ============================================================
+# Loaded automatically by up.sh when BROKER_MODE=kafka and
+# CODE_SOURCE=bind.  Bind-mounts APP_PATH into Kafka worker
+# containers at /app.
+# ============================================================
+
+services:
+  worker-kafka:
+    volumes:
+      - ${APP_PATH:?APP_PATH must be set in celery-profile.env when CODE_SOURCE=bind}:/app
+
+  flower-kafka:
+    volumes:
+      - ${APP_PATH}:/app
+
+  celery-beat-kafka:
+    volumes:
+      - ${APP_PATH}:/app

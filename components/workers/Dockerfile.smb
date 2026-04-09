@@ -1,0 +1,24 @@
+# ============================================================
+# Dockerfile.smb — Base + Samba/SMB client libraries
+# ============================================================
+# For workers that access SMB/CIFS file shares (pysmb, paramiko).
+# Pairs with requirements/smb.txt.
+# Tag: celery-microservice:smb
+# ============================================================
+FROM celery-microservice:base
+
+LABEL maintainer="django-celery-platform" \
+      description="Celery worker with SMB/SFTP support" \
+      version="3.1.0"
+
+# Install samba client and SSH libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    smbclient \
+    libsmbclient-dev \
+    openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install SMB/SFTP Python packages
+COPY requirements/smb.txt /tmp/requirements/smb.txt
+RUN pip install --no-cache-dir -r /tmp/requirements/smb.txt && \
+    rm -rf /tmp/requirements

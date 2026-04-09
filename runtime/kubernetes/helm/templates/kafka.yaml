@@ -1,0 +1,107 @@
+{{/*
+============================================================
+kafka.yaml — Kafka StatefulSet + Service
+============================================================
+Maps to: components/brokers/docker-compose.brokers.yml (kafka)
+Deployed only when brokerMode: kafka.
+Uses KRaft mode (no ZooKeeper dependency).
+*/}}
+{{- if and (include "celery-platform.kafkaEnabled" .) .Values.kafka.enabled (not .Values.kafka.external.enabled) }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+    {{- include "celery-platform.selectorLabels" (dict "component" "kafka" "context" .) | nindent 4 }}
+spec:
+  serviceName: {{ include "celery-platform.fullname" . }}-kafka
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "celery-platform.selectorLabels" (dict "component" "kafka" "context" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "celery-platform.selectorLabels" (dict "component" "kafka" "context" .) | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: kafka
+          image: "{{ .Values.kafka.image.repository }}:{{ .Values.kafka.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.kafka.port }}
+              name: kafka
+          env:
+            - name: KAFKA_CFG_NODE_ID
+              value: "1"
+            - name: KAFKA_CFG_PROCESS_ROLES
+              value: broker,controller
+            - name: KAFKA_CFG_LISTENERS
+              value: "PLAINTEXT://:{{ .Values.kafka.port }},CONTROLLER://:9093"
+            - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
+              value: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+            - name: KAFKA_CFG_CONTROLLER_QUORUM_VOTERS
+              value: "1@localhost:9093"
+            - name: KAFKA_CFG_CONTROLLER_LISTENER_NAMES
+              value: CONTROLLER
+            - name: KAFKA_CFG_NUM_PARTITIONS
+              value: {{ .Values.kafka.numPartitions | quote }}
+            - name: KAFKA_CFG_LOG_RETENTION_HOURS
+              value: {{ .Values.kafka.logRetentionHours | quote }}
+            - name: KAFKA_CFG_MESSAGE_MAX_BYTES
+              value: {{ .Values.kafka.messageMaxBytes | quote }}
+            - name: KAFKA_KRAFT_CLUSTER_ID
+              value: "LelM2dIFQkiUFvXCEcqRWA"  # TODO: generate per-install
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.kafka.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.kafka.port }}
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.kafka.resources | nindent 12 }}
+          {{- if .Values.kafka.persistence.enabled }}
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /bitnami/kafka
+          {{- end }}
+  {{- if .Values.kafka.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.kafka.persistence.storageClass }}
+        storageClassName: {{ .Values.kafka.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.kafka.persistence.size }}
+  {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "celery-platform.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.kafka.port }}
+      targetPort: kafka
+      name: kafka
+  selector:
+    {{- include "celery-platform.selectorLabels" (dict "component" "kafka" "context" .) | nindent 4 }}
+{{- end }}

@@ -1,0 +1,26 @@
+name: Test Observability
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'components/observability/**'
+      - '.github/workflows/test-observability.yml'
+  pull_request:
+    paths:
+      - 'components/observability/**'
+      - '.github/workflows/test-observability.yml'
+
+jobs:
+  smoke-test:
+    name: Observability Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make smoke test executable
+        run: chmod +x components/observability/tests/smoke_test.sh
+
+      - name: Run observability smoke test
+        run: bash components/observability/tests/smoke_test.sh

@@ -1,0 +1,9 @@
+# ============================================================
+# requirements/mssql.txt — SQL Server / ODBC dependencies
+# ============================================================
+# Paired with Dockerfile.mssql (which installs ODBC Driver 18).
+# Only install in workers that need SQL Server connectivity.
+# ============================================================
+
+pyodbc==5.3.0
+mssql-django==1.6

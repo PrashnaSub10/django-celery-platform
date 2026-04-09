@@ -1,0 +1,75 @@
+# ============================================================
+# requirements/core.txt — Celery platform core
+# ============================================================
+# Installed in Dockerfile.base. Every worker image gets these.
+# Requires Python 3.13+.
+#
+# RULE: Only packages the PLATFORM needs to run Celery workers
+# belong here. Application-layer dependencies (JWT, auth, email
+# providers, DRF, CORS, etc.) are injected at runtime by the
+# consuming project via EXTRA_PIP_PACKAGES or
+# requirements_celery.txt. See docs/OS_Commitment.md.
+# ============================================================
+
+# ── Celery ecosystem ────────────────────────────────────────
+celery==5.4.0
+redis==5.2.1
+amqp==5.3.1
+kombu==5.4.2
+billiard==4.2.1
+vine==5.1.0
+
+# ── Worker pools ────────────────────────────────────────────
+# gevent 24.11+ ships Python 3.13 wheels.
+# greenlet 3.1+ is required by gevent on 3.13.
+gevent==24.11.1
+greenlet==3.1.1
+
+# ── Kafka transport (BROKER_MODE=kafka) ─────────────────────
+# Required by kombu's confluentkafka transport.
+# librdkafka is statically linked in the wheel — no system deps needed.
+confluent-kafka==2.6.1
+
+# ── Flower (worker monitoring UI) ───────────────────────────
+flower==2.0.1
+
+# ── Django core (needed to load project settings in workers) ─
+# Only the minimal Django install — no project-specific apps.
+# Django 5.1+ requires Python 3.10+; 5.2 LTS targets 3.13.
+django==5.1.7
+django-environ==0.11.2
+django-celery-beat==2.7.0
+django-celery-results==2.5.1
+
+# ── HTTP & networking ────────────────────────────────────────
+requests==2.32.3
+urllib3==2.3.0
+certifi==2024.12.14
+
+# ── Utilities ────────────────────────────────────────────────
+python-dateutil==2.9.0
+# pytz is superseded by zoneinfo (stdlib in 3.9+) but kept for
+# Celery's timezone handling which still references it internally.
+pytz==2024.2
+tzdata==2025.2
+
+# ── CLI (Celery dependency) ──────────────────────────────────
+click==8.1.8
+click-didyoumean==0.3.1
+click-plugins==1.1.1.2
+click-repl==0.3.0
+prompt-toolkit==3.0.48
+
+# ── Django internals ─────────────────────────────────────────
+asgiref==3.8.1
+sqlparse==0.5.3
+
+# ── Prometheus metrics ───────────────────────────────────────
+prometheus-client==0.21.1
+
+# ── Excel/CSV (broadly needed for report tasks) ──────────────
+openpyxl==3.1.5
+xlsxwriter==3.2.0
+
+# ── Database URL parsing ─────────────────────────────────────
+dj-database-url==2.3.0

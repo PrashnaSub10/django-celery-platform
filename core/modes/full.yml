@@ -1,0 +1,41 @@
+# ============================================================
+# Full Mode overrides
+# ============================================================
+# Philosophy: "System survives real production stress and partial failure"
+# Purpose: High reliability + security + scale.
+# Adds: Hybrid brokers, full exporters, alerting, mTLS enabled.
+#
+# NOTE: Explicitly restores all services to scale: 1 so that
+# switching from minimal or standard mode re-enables everything.
+# Requires docker compose >= 2.2 for scale: override support.
+# ============================================================
+
+services:
+  rabbitmq:
+    scale: 1
+  kafka:
+    scale: 1
+  worker-fast:
+    scale: 1
+  worker-critical:
+    scale: 1
+  flower-rabbitmq:
+    scale: 1
+  celery-exporter-redis:
+    scale: 1
+  celery-exporter-rabbitmq:
+    scale: 1
+  rabbitmq-exporter:
+    scale: 1
+  redis-exporter:
+    scale: 1
+  node-exporter:
+    scale: 1
+  nginx-exporter:
+    scale: 1
+  prometheus:
+    scale: 1
+  grafana:
+    scale: 1
+  alertmanager:
+    scale: 1
