@@ -49,7 +49,7 @@ How your Django project code reaches the Celery worker containers. The platform 
 
 ```bash
 # 1. Clone
-git clone https://github.com/your-org/django-celery-platform
+git clone https://github.com/PrashnaSub10/django-celery-platform
 cd django-celery-platform
 
 # 2. Generate secrets
