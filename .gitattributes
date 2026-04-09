@@ -33,3 +33,12 @@ docker-compose*.yml text eol=lf
 *.png binary
 *.jpg binary
 *.pdf binary
+
+# ── GitHub Linguist overrides ─────────────────────────────────
+# Helm chart templates use Go Template syntax — exclude from language stats
+# (they are scaffolding, not the platform's primary language)
+runtime/kubernetes/ linguist-detectable=false
+
+# Smoke tests and CI scripts are tooling, not application code
+components/*/tests/ linguist-detectable=false
+.github/            linguist-detectable=false
