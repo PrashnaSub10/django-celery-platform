@@ -33,6 +33,7 @@ x-worker-base: &worker-base
     - PYTHONPATH=/app
     - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
     - CONTAINER_ENV=true
+    - ALLOW_RUNTIME_PIP=${ALLOW_RUNTIME_PIP:-false}
     - EXTRA_PIP_PACKAGES=${EXTRA_PIP_PACKAGES:-}
     - REDIS_HOST=${REDIS_HOST:-celery-redis-shared}
     - REDIS_PORT=${REDIS_PORT:-6379}

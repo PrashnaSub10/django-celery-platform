@@ -70,7 +70,18 @@ server {
 server {
     listen 80;
     server_name _;
-    return 301 https://$host$request_uri;
+
+    # Health check bypasses redirect — required for Docker healthchecks and
+    # infrastructure probes that cannot follow HTTPS redirects.
+    location /health {
+        access_log off;
+        return 200 '{"status":"healthy"}';
+        add_header Content-Type application/json;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
 }
 
 # ── HTTPS (main) ──────────────────────────────────────────────

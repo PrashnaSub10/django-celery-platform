@@ -72,8 +72,9 @@ backup/
 .DS_Store
 Thumbs.db
 
-# ── Claude Code context file — AI assistant instructions, not for public ─────
+# ── Claude Code context file and memory — AI assistant instructions, not for public ─────
 CLAUDE.md
+.claude/
 
 # ── IDE ──────────────────────────────────────────────────────
 .vscode/

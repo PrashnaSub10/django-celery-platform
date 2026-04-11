@@ -11,6 +11,9 @@ LABEL maintainer="django-celery-platform" \
       description="Celery worker with SMB/SFTP support" \
       version="3.1.0"
 
+# Switch to root for system package installation, then drop back to celery.
+USER root
+
 # Install samba client and SSH libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
     smbclient \
@@ -22,3 +25,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements/smb.txt /tmp/requirements/smb.txt
 RUN pip install --no-cache-dir -r /tmp/requirements/smb.txt && \
     rm -rf /tmp/requirements
+
+USER celery

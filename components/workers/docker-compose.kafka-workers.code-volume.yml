@@ -9,16 +9,17 @@
 services:
   worker-kafka:
     volumes:
-      - ${APP_VOLUME_NAME:?APP_VOLUME_NAME must be set when CODE_SOURCE=volume}:/app
+      - app_code:/app
 
   flower-kafka:
     volumes:
-      - ${APP_VOLUME_NAME}:/app
+      - app_code:/app
 
   celery-beat-kafka:
     volumes:
-      - ${APP_VOLUME_NAME}:/app
+      - app_code:/app
 
 volumes:
-  ${APP_VOLUME_NAME}:
+  app_code:
     external: true
+    name: ${APP_VOLUME_NAME:?APP_VOLUME_NAME must be set when CODE_SOURCE=volume}

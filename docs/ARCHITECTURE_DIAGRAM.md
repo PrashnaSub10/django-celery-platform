@@ -506,6 +506,21 @@ flowchart LR
 | `git` | `git clone` at startup, `git pull` on restart | Cloud, remote servers | `APP_GIT_URL` |
 | `pip` | `pip install APP_PIP_PACKAGE` at startup | Packaged Django apps | `APP_PIP_PACKAGE` |
 
+> [!WARNING]
+> **The Multi-Project Scaling Challenge**
+> This is exactly the kind of problem that shows why a single shared worker image doesn’t scale well across multiple Django projects. If two projects depend on the same library but require different versions, you’ll inevitably hit conflicts. Here are the main strategies to manage version mismatches:
+> 
+> **🔹 1. Per‑Project Worker Images (Recommended)**
+> - Each project builds its own Celery worker image with its own `requirements.txt` or `poetry.lock`.
+> - Workers connect to the shared Redis broker, but run in isolated containers.
+> - This way, Project A can use Django==4.2 while Project B uses Django==5.0, without clashing.
+> - CI/CD pipelines ensure each worker image is rebuilt with the correct dependencies.
+> 
+> **🔹 2. Queue Segregation**
+> - Use separate queues per project in Redis.
+> - Workers only subscribe to their project’s queue.
+> - Prevents workers from accidentally consuming tasks from another project that might require incompatible dependencies.
+
 ---
 
 ## 9. Component Boundaries & Interface Contracts
@@ -564,6 +579,20 @@ graph TB
 | **Brokers** | Message queuing, global state, result storage | Must not depend on workers or monitoring |
 | **Workers** | Task execution, code runtime, Flower monitoring | Parametric injection only; project-agnostic |
 | **Observability** | Telemetry, dashboards, alerting | Passive observer; no impact on system if it fails |
+
+> [!IMPORTANT]
+> **Multi-Mode Ingress Strategy**
+> The platform gateway layer is deliberately decoupled to support two distinct ingress modes. Deployment pipelines **must** explicitly choose their ingress strategy based on scale:
+> 
+> **🔹 1. Static Ingress (Nginx)**
+> - **Best For:** Startups, single-team deployments, bare-metal servers, and local environments.
+> - **Mechanism:** The built-in, pre-configured Nginx container provides rock-solid rate limiting, static TLS/mTLS termination, and straightforward WebSocket routing for a singular upstream group.
+> - **Caution:** Extremely reliable but lacks dynamic reverse-proxying. If you need to route dozens of subdomains dynamically, maintaining static Nginx configurations becomes an anti-pattern.
+> 
+> **🔹 2. Dynamic Ingress (Traefik / Enterprise Gateways)**
+> - **Best For:** Enterprise multi-tenant clusters, automated ephemeral CI/CD environments, and Kubernetes.
+> - **Mechanism:** Bypass the generic Nginx components and attach an intelligent edge router like **Traefik**. Traefik hooks directly into Docker daemon labels or Kubernetes Ingress objects to automate `Host` routing, load balancing, and zero-downtime Let's Encrypt certificates.
+> - **Caution (Security):** Relying on Docker socket listeners exposes the host to container breakout risks. **Always** deploy dynamic ingress controllers on dedicated edge networks using unprivileged read-only socket proxies, keeping your Celery workers and Redis databases strictly isolated in non-routable internal networks.
 
 ---
 
@@ -653,10 +682,16 @@ graph LR
     ALERT_S --> SL
     ALERT_S --> EM
 
-    style PROM_S fill:#ea580c,color:#fff
-    style GRAF_S fill:#7c3aed,color:#fff
     style ALERT_S fill:#dc2626,color:#fff
 ```
+
+> [!TIP]
+> **Enterprise Observability Recommendation**
+> For this platform, we recommend keeping **Prometheus + Grafana** as the default tier (open-source, flexible, and fully self-hosted).
+> 
+> However, we offer **Datadog integration** as an optional enterprise module for teams that require SaaS-level APM and logging out of the box. 
+> 
+> **Per-Project Filtering Strategy:** If you share a cluster, it is critical to document the filtering strategy so teams only see their own metrics. Use **Grafana variables** (filtering by `Queue` or `namespace`) or **Datadog tags** (e.g., `project:alpha`) attached to the Celery workers and emitted metrics to achieve multi-tenant metric isolation.
 
 ---
 

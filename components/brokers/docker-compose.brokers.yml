@@ -18,7 +18,7 @@ services:
       --appendonly yes
       --maxmemory 512mb
       --maxmemory-policy allkeys-lru
-      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be configured in .env.secrets (run ./init-secrets.sh)}
+      --requirepass "${REDIS_PASSWORD:?REDIS_PASSWORD must be configured in .env.secrets (run ./init-secrets.sh)}"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -52,8 +52,8 @@ services:
       - "127.0.0.1:${PORT_RABBITMQ:-5672}:5672"
       - "127.0.0.1:${PORT_RABBITMQ_MGMT:-15672}:15672"
     environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:?RABBITMQ_USER must be configured in .env.secrets (run ./init-secrets.sh)}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD must be configured in .env.secrets (run ./init-secrets.sh)}
+      - "RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:?RABBITMQ_USER must be configured in .env.secrets (run ./init-secrets.sh)}"
+      - "RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD must be configured in .env.secrets (run ./init-secrets.sh)}"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:

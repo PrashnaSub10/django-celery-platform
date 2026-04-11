@@ -18,9 +18,11 @@ export REDIS_PASSWORD=smokepass
 export RABBITMQ_USER=smokeuser
 export RABBITMQ_PASSWORD=smokepass
 
-# 2. Boot the stack 
+# 2. Boot the stack — Redis and RabbitMQ only.
+# Kafka (bitnami/kafka:3.9, ~800 MB) is not tested here; pulling it in CI is slow
+# and its startup is irrelevant to the broker contract this test validates.
 echo "[1/3] booting brokers isolated..."
-docker compose -f docker-compose.brokers.yml up -d
+docker compose -f docker-compose.brokers.yml up -d redis rabbitmq
 
 # Wait for RabbitMQ management API with a timeout instead of a fixed sleep
 echo "[2/3] Waiting for RabbitMQ management API (timeout: 60s)..."

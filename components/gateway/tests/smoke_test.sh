@@ -36,6 +36,12 @@ if [ ! -f ssl/fullchain.pem ] || [ ! -f ssl/privkey.pem ]; then
 fi
 
 # 2. Boot the stack
+# host.docker.internal is injected by Docker Desktop (Mac/Windows) but is absent
+# on Linux (GitHub Actions). None of the smoke tests exercise the upstream — they
+# test health, redirect, and access control — so a non-listening 127.0.0.1 is fine.
+export DJANGO_UPSTREAM_HOST="${DJANGO_UPSTREAM_HOST:-127.0.0.1}"
+export DJANGO_ASGI_HOST="${DJANGO_ASGI_HOST:-127.0.0.1}"
+
 echo "[2/3] booting gateway isolated..."
 docker compose -f docker-compose.gateway.yml up -d
 
