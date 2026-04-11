@@ -6,8 +6,33 @@ Maps to: components/gateway/docker-compose.gateway.yml
 In Kubernetes, the gateway is an Ingress resource backed by
 an Ingress Controller (nginx-ingress, traefik, ALB, etc.)
 rather than a standalone Nginx container.
+
+The Flower backend is resolved from brokerMode so that
+BROKER_MODE=rabbitmq and BROKER_MODE=kafka users reach their
+correct Flower UI, not the Redis one.
 */}}
 {{- if .Values.ingress.enabled }}
+
+{{/*
+Resolve the active Flower service and port from brokerMode.
+dual (workerMode) → flower-hybrid
+kafka             → flower-kafka
+rabbitmq          → flower-rabbitmq
+redis / hybrid    → flower-redis  (hybrid has its own UI at /hybrid if dual is also set)
+*/}}
+{{- $flowerService := printf "%s-flower-redis" (include "celery-platform.fullname" .) -}}
+{{- $flowerPort := .Values.flower.redis.port -}}
+{{- if eq .Values.workerMode "dual" -}}
+  {{- $flowerService = printf "%s-flower-hybrid" (include "celery-platform.fullname" .) -}}
+  {{- $flowerPort = .Values.flower.hybrid.port -}}
+{{- else if eq .Values.brokerMode "kafka" -}}
+  {{- $flowerService = printf "%s-flower-kafka" (include "celery-platform.fullname" .) -}}
+  {{- $flowerPort = .Values.flower.kafka.port -}}
+{{- else if eq .Values.brokerMode "rabbitmq" -}}
+  {{- $flowerService = printf "%s-flower-rabbitmq" (include "celery-platform.fullname" .) -}}
+  {{- $flowerPort = .Values.flower.rabbitmq.port -}}
+{{- end -}}
+
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -44,9 +69,9 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ include "celery-platform.fullname" $ }}-flower-redis
+                name: {{ $flowerService }}
                 port:
-                  number: {{ $.Values.flower.redis.port }}
+                  number: {{ $flowerPort }}
           {{- end }}
     {{- end }}
 {{- end }}

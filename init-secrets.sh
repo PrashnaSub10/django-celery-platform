@@ -9,6 +9,14 @@
 
 SECRETS_FILE=".env.secrets"
 
+# Working directory guard — .env.secrets must land next to core/up.sh
+if [ ! -f "core/up.sh" ]; then
+    echo "ERROR: Run this script from the django-celery-platform repo root."
+    echo "   cd /path/to/django-celery-platform"
+    echo "   ./init-secrets.sh"
+    exit 1
+fi
+
 if [ -f "$SECRETS_FILE" ]; then
     echo "$SECRETS_FILE already exists. Skipping generation."
     echo "   Delete it and re-run to rotate all credentials."
@@ -18,7 +26,10 @@ fi
 # Verify openssl is available before attempting to generate secrets.
 if ! command -v openssl > /dev/null 2>&1; then
     echo "ERROR: openssl is required but not found."
-    echo "   Install it with: sudo apt install openssl"
+    echo "   Ubuntu/Debian:  sudo apt install openssl"
+    echo "   macOS:          brew install openssl"
+    echo "   RHEL/CentOS:    sudo yum install openssl"
+    echo "   Alpine:         apk add openssl"
     exit 1
 fi
 

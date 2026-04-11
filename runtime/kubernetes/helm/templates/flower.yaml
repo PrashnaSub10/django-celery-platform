@@ -111,6 +111,10 @@ spec:
       labels:
         {{- include "celery-platform.selectorLabels" (dict "component" "flower-rabbitmq" "context" .) | nindent 8 }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -190,6 +194,10 @@ spec:
       labels:
         {{- include "celery-platform.selectorLabels" (dict "component" "flower-kafka" "context" .) | nindent 8 }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

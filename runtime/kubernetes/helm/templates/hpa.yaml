@@ -85,6 +85,20 @@ spec:
 {{- if and .Values.workerCritical.enabled .Values.workerCritical.autoscaling.enabled (include "celery-platform.rabbitmqEnabled" .) }}
 
 {{- if .Values.workerCritical.autoscaling.keda.enabled }}
+# KEDA TriggerAuthentication — supplies the RabbitMQ AMQP URL from the
+# platform secret. KEDA does not support shell-style $(VAR) substitution
+# in ScaledObject metadata; credentials must come from a TriggerAuthentication.
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ include "celery-platform.fullname" . }}-rabbitmq-auth
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretTargetRef:
+    - parameter: host
+      name: {{ include "celery-platform.fullname" . }}-secrets
+      key: rabbitmq-url
 # KEDA ScaledObject — scales based on RabbitMQ queue depth
 ---
 apiVersion: keda.sh/v1alpha1
@@ -104,9 +118,10 @@ spec:
   triggers:
     - type: rabbitmq
       metadata:
-        host: amqp://{{ .Values.rabbitmq.user }}:$(RABBITMQ_PASSWORD)@{{ include "celery-platform.fullname" . }}-rabbitmq:{{ .Values.rabbitmq.port }}/
         queueName: {{ .Values.workerCritical.autoscaling.keda.queueName }}
         queueLength: {{ .Values.workerCritical.autoscaling.keda.queueLength | quote }}
+      authenticationRef:
+        name: {{ include "celery-platform.fullname" . }}-rabbitmq-auth
 
 {{- else }}
 ---

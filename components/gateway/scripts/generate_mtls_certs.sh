@@ -2,18 +2,39 @@
 # ============================================================
 # generate_mtls_certs.sh — Self-signed TLS + mTLS certificates
 # ============================================================
-# Generates certificates into nginx/ssl/ (the path Nginx expects).
-# For production, replace server.crt/key with Let's Encrypt certs.
+# Writes certificates to components/gateway/ssl/ — the exact
+# path the compose volume mount (./ssl) and smoke test expect.
+# For production, replace fullchain.pem/privkey.pem with real certs.
 #
-# Usage:
-#   ./scripts/generate_mtls_certs.sh [domain]
-#   ./scripts/generate_mtls_certs.sh yourdomain.com
+# Usage (run from any directory):
+#   ./components/gateway/scripts/generate_mtls_certs.sh [domain]
+#   ./components/gateway/scripts/generate_mtls_certs.sh yourdomain.com
 # ============================================================
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOMAIN="${1:-localhost}"
-CERT_DIR="./nginx/ssl"
+# Resolves to components/gateway/ssl/ — matches compose volume mount ./ssl
+CERT_DIR="${SCRIPT_DIR}/../ssl"
+
+# ── Preflight: openssl ────────────────────────────────────────
+if ! command -v openssl > /dev/null 2>&1; then
+    echo "ERROR: openssl is required but not found."
+    echo "   Ubuntu/Debian:  sudo apt install openssl"
+    echo "   macOS:          brew install openssl"
+    echo "   RHEL/CentOS:    sudo yum install openssl"
+    echo "   Alpine:         apk add openssl"
+    exit 1
+fi
+
+# ── Overwrite protection ──────────────────────────────────────
+if [ -f "${CERT_DIR}/fullchain.pem" ] || [ -f "${CERT_DIR}/privkey.pem" ]; then
+    echo "Certificates already exist in ${CERT_DIR}."
+    echo "   Delete them and re-run to regenerate:"
+    echo "   rm ${CERT_DIR}/fullchain.pem ${CERT_DIR}/privkey.pem"
+    exit 0
+fi
 
 echo "Creating certificate directory: $CERT_DIR"
 mkdir -p "$CERT_DIR"
@@ -70,7 +91,7 @@ chmod 600 -- *.key
 rm -f server.csr client.csr server_ext.cnf
 
 echo ""
-echo "✓ Certificates generated in $CERT_DIR"
+echo "✓ Certificates generated in ${CERT_DIR}"
 echo ""
 echo "  fullchain.pem  — Nginx ssl_certificate (server + CA chain)"
 echo "  privkey.pem    — Nginx ssl_certificate_key"
@@ -79,11 +100,11 @@ echo "  client.crt/key — Client certificate for testing mTLS"
 echo ""
 echo "For production, replace fullchain.pem + privkey.pem with Let's Encrypt:"
 echo "  sudo certbot certonly --standalone -d ${DOMAIN}"
-echo "  cp /etc/letsencrypt/live/${DOMAIN}/fullchain.pem ./nginx/ssl/"
-echo "  cp /etc/letsencrypt/live/${DOMAIN}/privkey.pem   ./nginx/ssl/"
+echo "  cp /etc/letsencrypt/live/${DOMAIN}/fullchain.pem ${CERT_DIR}/"
+echo "  cp /etc/letsencrypt/live/${DOMAIN}/privkey.pem   ${CERT_DIR}/"
 echo ""
 echo "Test self-signed HTTPS:"
-echo "  curl -k https://localhost:8443/health"
+echo "  curl -k https://localhost:443/health"
 echo ""
 echo "Test mTLS with client cert:"
-echo "  curl -k --cert $CERT_DIR/client.crt --key $CERT_DIR/client.key https://localhost:8443/api/"
+echo "  curl -k --cert ${CERT_DIR}/client.crt --key ${CERT_DIR}/client.key https://localhost:443/api/"
