@@ -8,7 +8,7 @@
 #     ${DJANGO_UPSTREAM_PORT}        — Django WSGI port (default: 9845)
 #
 #   ASGI upstream (active when ASGI_MODE=true):
-#     ${DJANGO_ASGI_HOST}            — Daphne ASGI host (default: app-django-asgi)
+#     ${DJANGO_ASGI_HOST}            — Daphne ASGI host (default: host.docker.internal)
 #     ${DJANGO_ASGI_PORT}            — Daphne ASGI port (default: 9501)
 #
 #   Shared:
@@ -36,10 +36,12 @@ upstream django_wsgi {
 
 # ── ASGI upstream — WebSocket / Django Channels ──────────────
 # Points to the Daphne container when ASGI_MODE=true.
-# When ASGI_MODE=false, this resolves to the same host:port as
-# django_wsgi so /ws/ traffic still works via a single ASGI server.
+# When ASGI_MODE=false, set DJANGO_ASGI_HOST/PORT to the same values as
+# DJANGO_UPSTREAM_HOST/PORT so /ws/ traffic still works via a single ASGI server.
+# Both variables are always resolved from the compose environment block —
+# envsubst does not support nested ${VAR:-${OTHER}} syntax.
 upstream django_asgi {
-    server ${DJANGO_ASGI_HOST:-${DJANGO_UPSTREAM_HOST}}:${DJANGO_ASGI_PORT:-${DJANGO_UPSTREAM_PORT}} max_fails=3 fail_timeout=30s;
+    server ${DJANGO_ASGI_HOST}:${DJANGO_ASGI_PORT} max_fails=3 fail_timeout=30s;
     keepalive 16;
 }
 

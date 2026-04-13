@@ -110,7 +110,7 @@ if [ "${WAIT_FOR_REDIS:-}" = "true" ]; then
     echo "[entrypoint] Waiting for Redis at ${REDIS_HOST:-redis}:${REDIS_PORT:-6379}..."
     _ready=0
     for i in $(seq 1 30); do
-        if timeout 2 sh -c "echo > /dev/tcp/${REDIS_HOST:-redis}/${REDIS_PORT:-6379}" 2>/dev/null; then
+        if python3 -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('${REDIS_HOST:-redis}', ${REDIS_PORT:-6379})); s.close()" 2>/dev/null; then
             echo "[entrypoint] Redis is ready."
             _ready=1
             break
@@ -128,7 +128,7 @@ if [ "${WAIT_FOR_RABBITMQ:-}" = "true" ]; then
     echo "[entrypoint] Waiting for RabbitMQ at ${RABBITMQ_HOST:-rabbitmq}:${RABBITMQ_PORT:-5672}..."
     _ready=0
     for i in $(seq 1 30); do
-        if timeout 2 sh -c "echo > /dev/tcp/${RABBITMQ_HOST:-rabbitmq}/${RABBITMQ_PORT:-5672}" 2>/dev/null; then
+        if python3 -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('${RABBITMQ_HOST:-rabbitmq}', ${RABBITMQ_PORT:-5672})); s.close()" 2>/dev/null; then
             echo "[entrypoint] RabbitMQ is ready."
             _ready=1
             break
@@ -146,7 +146,7 @@ if [ "${WAIT_FOR_KAFKA:-}" = "true" ]; then
     echo "[entrypoint] Waiting for Kafka at ${KAFKA_HOST:-kafka}:${KAFKA_PORT:-9092}..."
     _ready=0
     for i in $(seq 1 30); do
-        if timeout 2 sh -c "echo > /dev/tcp/${KAFKA_HOST:-kafka}/${KAFKA_PORT:-9092}" 2>/dev/null; then
+        if python3 -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('${KAFKA_HOST:-kafka}', ${KAFKA_PORT:-9092})); s.close()" 2>/dev/null; then
             echo "[entrypoint] Kafka is ready."
             _ready=1
             break

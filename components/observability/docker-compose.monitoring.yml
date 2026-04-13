@@ -16,8 +16,12 @@ services:
     restart: always
     ports:
       - "127.0.0.1:${PORT_PROMETHEUS:-9090}:9090"
-    # Using a custom entrypoint to allow envsubst on prometheus.yml
-    entrypoint: [ "/bin/sh", "/etc/prometheus/docker-entrypoint.sh" ]
+    # Using a custom entrypoint to allow envsubst on prometheus.yml.
+    # The entire ./prometheus directory is mounted at /prometheus-config so
+    # individual file mounts (which become empty directories on Windows/Docker
+    # Desktop) are avoided. The entrypoint reads from /prometheus-config and
+    # writes the rendered config to /etc/prometheus/prometheus.yml.
+    entrypoint: [ "/bin/sh", "/prometheus-config/docker-entrypoint.sh" ]
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -25,13 +29,12 @@ services:
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
     volumes:
-      - ./prometheus/prometheus.yml.template:/etc/prometheus/prometheus.yml.template:ro
-      - ./prometheus/docker-entrypoint.sh:/etc/prometheus/docker-entrypoint.sh:ro
-      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ./prometheus:/prometheus-config:ro
       - prometheus_data:/prometheus
     environment:
       - METRICS_TARGET_HOST=${METRICS_TARGET_HOST:-host.docker.internal}
       - METRICS_TARGET_PORT=${METRICS_TARGET_PORT:-9845}
+      - PROMETHEUS_ENVIRONMENT=${PROMETHEUS_ENVIRONMENT:-production}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -172,7 +175,7 @@ services:
     ports:
       - "127.0.0.1:${PORT_ALERTMANAGER:-9093}:9093"
     volumes:
-      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./prometheus:/prometheus-config:ro
       - alertmanager_data:/alertmanager
     environment:
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
@@ -182,7 +185,7 @@ services:
       - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
       - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
     command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--config.file=/prometheus-config/alertmanager.yml'
       - '--storage.path=/alertmanager'
       - '--web.external-url=http://localhost:9093'
     networks:

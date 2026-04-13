@@ -37,6 +37,7 @@ legacy/
 
 # ── Project-specific docs not relevant to the platform ───────
 # Internal AI & Planning Reference Documentation
+docs/caveats.md
 docs/LLM_Reference_Point.md
 docs/STRATEGIC_POSITIONING.md
 docs/Additional_Works.md

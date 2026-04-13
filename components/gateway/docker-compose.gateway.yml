@@ -11,7 +11,7 @@ services:
     container_name: celery-nginx-shared
     restart: always
     volumes:
-      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./templates:/etc/nginx/templates:ro
       - ./ssl:/etc/nginx/ssl:ro
       - nginx_logs:/var/log/nginx
     environment:

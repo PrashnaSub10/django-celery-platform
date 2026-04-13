@@ -1,18 +1,18 @@
 #!/bin/sh
-# Submits env variables into Prometheus config prior to launching standard Prometheus
+# Renders prometheus.yml from template before launching Prometheus.
+# Source files are read from /prometheus-config (directory-mounted from
+# ./prometheus/) so individual file mounts — which become empty directories
+# on Windows Docker Desktop — are avoided.
 set -e
-
-# The prom/prometheus image uses busybox. `envsubst` is usually not built into it natively as part of gettext.
-# Instead, we will use sed if envsubst is missing, or download it dynamically, or use a basic awk.
-# Fortunately, busybox has `sed`.
 
 echo "Generating prometheus.yml from template..."
 
-# Use | as the sed delimiter instead of / so that hostnames containing
-# forward slashes (e.g. a URL path) do not break the substitution.
+# Use | as the sed delimiter so hostnames with forward slashes do not break
+# the substitution. The prom/prometheus image uses busybox which has sed.
 sed -e "s|\${METRICS_TARGET_HOST}|${METRICS_TARGET_HOST}|g" \
     -e "s|\${METRICS_TARGET_PORT}|${METRICS_TARGET_PORT}|g" \
-    /etc/prometheus/prometheus.yml.template > /etc/prometheus/prometheus.yml
+    -e "s|\${PROMETHEUS_ENVIRONMENT:-production}|${PROMETHEUS_ENVIRONMENT:-production}|g" \
+    /prometheus-config/prometheus.yml.template > /etc/prometheus/prometheus.yml
 
 echo "Starting Prometheus..."
 exec /bin/prometheus "$@"

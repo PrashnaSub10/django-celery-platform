@@ -6,7 +6,7 @@ global:
     environment: '${PROMETHEUS_ENVIRONMENT:-production}'
 
 rule_files:
-  - /etc/prometheus/alert_rules.yml
+  - /prometheus-config/alert_rules.yml
 
 alerting:
   alertmanagers:
