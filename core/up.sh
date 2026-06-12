@@ -79,12 +79,30 @@ if [ "$COMMAND" = "up" ] || [ "$COMMAND" = "restart" ]; then
     *) echo "❌ ERROR: CODE_SOURCE must be one of: bind image git volume pip (got: $CODE_SOURCE)"; exit 1 ;;
   esac
 
+  # TLS preflight — Nginx will not start without certificates, and the
+  # resulting compose error is cryptic. Fail here with the exact fix instead.
+  CERT_DIR="components/gateway/ssl"
+  if [ ! -f "$CERT_DIR/fullchain.pem" ] || [ ! -f "$CERT_DIR/privkey.pem" ]; then
+    echo "❌ ERROR: TLS certificates not found in $CERT_DIR/"
+    echo "   The gateway (Nginx) requires fullchain.pem + privkey.pem to start."
+    echo "   Local/dev:   ./components/gateway/scripts/generate_mtls_certs.sh localhost"
+    echo "   Production:  copy your Let's Encrypt fullchain.pem + privkey.pem there."
+    echo "   Then re-run this command."
+    exit 1
+  fi
+
   # Validate required variables per CODE_SOURCE mode
   case "$CODE_SOURCE" in
     bind)
       if [ -z "${APP_PATH:-}" ]; then
         echo "❌ ERROR: CODE_SOURCE=bind requires APP_PATH."
         echo "   Set APP_PATH=/absolute/path/to/your/django-project in: $PROJECT_PROFILE"
+        exit 1
+      fi
+      if [ ! -d "$APP_PATH" ]; then
+        echo "❌ ERROR: CODE_SOURCE=bind but APP_PATH='$APP_PATH' does not exist on this host."
+        echo "   Workers would start, fail to import your code, and restart in a loop."
+        echo "   Set APP_PATH to the absolute path of your Django project in: $PROJECT_PROFILE"
         exit 1
       fi
       ;;
@@ -144,6 +162,22 @@ if [ "$COMMAND" = "up" ] || [ "$COMMAND" = "restart" ]; then
     echo "   Kafka runs as a standalone broker lane. Use WORKER_MODE=single."
     exit 1
   fi
+
+  # Sanity-check Celery app entrypoints — a wrong format produces a worker
+  # import crash-loop with the error buried in docker logs.
+  for _app_var in CELERY_APP_REDIS CELERY_APP_RABBITMQ CELERY_APP_KAFKA; do
+    eval "_app_val=\${$_app_var:-}"
+    if [ -n "$_app_val" ]; then
+      case "$_app_val" in
+        *:*) ;;
+        *)
+          echo "⚠️  WARNING: ${_app_var}='${_app_val}' is not module:attribute format."
+          echo "   Expected example: config.celery_hybrid:app_redis"
+          echo ""
+          ;;
+      esac
+    fi
+  done
 
   # Validate CHANNELS_REDIS_PASSWORD is set when ASGI_MODE=true
   if [ "$ASGI_MODE" = "true" ]; then
@@ -256,47 +290,4 @@ COMPOSE_CMD="docker compose \
   --env-file components/workers/strategies/worker.${WORKER_MODE}.env \
   --env-file .env.secrets"
 
-# ── Ensure the shared broker network exists ───────────────────
-# components/workers/*.yml and components/workers/docker-compose.dual-workers.yml
-# declare celery-broker-net as `external: true`. When merged with
-# components/brokers/docker-compose.brokers.yml (which defines the network),
-# docker compose's merge resolves the network as external — so on a first
-# run, "up" fails with "network celery-broker-net declared as external, but
-# could not be found" because nothing ever creates it. Create it ourselves,
-# idempotently, before bringing up the stack.
-if [ "$COMMAND" = "up" ] || [ "$COMMAND" = "restart" ]; then
-  if ! docker network inspect celery-broker-net >/dev/null 2>&1; then
-    NETWORK_SUBNET=$(grep -E '^CELERY_NETWORK_SUBNET=' .docker.env 2>/dev/null | cut -d= -f2-)
-    NETWORK_SUBNET="${NETWORK_SUBNET:-10.220.200.0/24}"
-    echo "Creating docker network celery-broker-net (${NETWORK_SUBNET})..."
-    docker network create --driver bridge --subnet "${NETWORK_SUBNET}" celery-broker-net
-  fi
-fi
-
-case "$COMMAND" in
-  up)
-    eval "$COMPOSE_CMD up -d"
-    echo "--------------------------------------------------------"
-    echo "✅ Stack is up. Check status: docker ps"
-    ;;
-  down)
-    eval "$COMPOSE_CMD down"
-    echo "✅ Stack stopped."
-    ;;
-  restart)
-    eval "$COMPOSE_CMD down"
-    eval "$COMPOSE_CMD up -d"
-    echo "✅ Stack restarted."
-    ;;
-  ps)
-    eval "$COMPOSE_CMD ps"
-    ;;
-  logs)
-    eval "$COMPOSE_CMD logs -f"
-    ;;
-  *)
-    echo "❌ Unknown command: $COMMAND"
-    echo "   Usage: ./core/up.sh [up|down|restart|ps|logs]"
-    exit 1
-    ;;
-esac
+# ── Ensure the shared broker network exists ──────────────────�

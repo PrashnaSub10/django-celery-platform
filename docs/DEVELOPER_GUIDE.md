@@ -188,11 +188,23 @@ APP_PATH=/home/deploy/my-django-project
 ```
 
 **Requirement:** The `celery` user inside the container (non-root) needs **read** access
-to `APP_PATH`. Ensure the directory has group-read or world-read permissions:
+to `APP_PATH`. Prefer group-based access over world-readable permissions — a recursively
+world-readable deployment directory is a security smell on shared hosts:
 
 ```bash
-chmod o+rX -R /home/deploy/my-django-project
+# Recommended: shared group, group-read only
+sudo groupadd --force celery-shared
+sudo usermod -aG celery-shared deploy
+sudo chown -R deploy:celery-shared /home/deploy/my-django-project
+sudo chmod -R g+rX /home/deploy/my-django-project
 ```
+
+The container's `celery` user UID can be checked with
+`docker run --rm --entrypoint id celery-microservice:base celery` if you need an exact
+UID match for the group mapping.
+
+(Fallback for single-user dev boxes only — not shared or production hosts:
+`chmod -R o+rX /home/deploy/my-django-project`)
 
 ---
 
@@ -691,20 +703,4 @@ For development only:
 
 ```env
 ALLOW_RUNTIME_PIP=true
-EXTRA_PIP_PACKAGES=pysmb==1.2.13
-```
-
-### WebSocket connections drop after 60 seconds
-
-Nginx `proxy_read_timeout` defaults to 60s for HTTP locations.  The
-`/ws/` location in `nginx.conf.template` sets `proxy_read_timeout 86400s`
-explicitly.  If you are seeing drops, confirm the Nginx config was
-regenerated after the last gateway restart:
-
-```bash
-docker exec celery-nginx-shared nginx -T | grep proxy_read_timeout
-# /ws/ block must show: proxy_read_timeout 86400s
-```
-
-If the value is missing, the template substitution failed.  Check
-`docker logs celery-nginx-shared` for `envsubst` errors.
+EXTRA_PIP_PACKAGE

@@ -47,34 +47,48 @@ How your Django project code reaches the Celery worker containers. The platform 
 
 ## 2. Quick Start
 
+**Prerequisites:** Docker ≥ 24, Docker Compose v2 (`docker compose version`), `openssl` on PATH. Linux, macOS, or Windows with Docker Desktop.
+
 ```bash
 # 1. Clone
 git clone https://github.com/PrashnaSub10/django-celery-platform
 cd django-celery-platform
 
-# 2. Generate secrets
-./init-secrets.sh
+# 2. First-run setup — secrets + TLS certs + profile template, idempotent
+./setup.sh
 
-# 3. Generate TLS certificates (Nginx will not start without these)
-./components/gateway/scripts/generate_mtls_certs.sh localhost   # dev/localhost
-# ./components/gateway/scripts/generate_mtls_certs.sh yourdomain.com  # production
+# 3. Edit celery-profile.env — set APP_PATH and CELERY_APP_REDIS at minimum
 
-# 4. Create your project profile
-cp .celery-profile.env.example celery-profile.env
-# Edit celery-profile.env — set APP_PATH and CELERY_APP_REDIS at minimum
-
-# 5. Launch — standard mode, Redis broker, single worker
-MODE=standard BROKER_MODE=redis SERVER_PROFILE=medium \
+# 4. Launch minimal first (Redis only, no monitoring) and grow from there
+MODE=minimal BROKER_MODE=redis SERVER_PROFILE=small \
   PROJECT_PROFILE=celery-profile.env \
-  ./core/up.sh
+  ./core/up.sh up
 
-# Launch — full mode, hybrid brokers, dual workers with unified Flower
+# Promote: standard mode (adds RabbitMQ + monitoring)
+MODE=standard BROKER_MODE=hybrid SERVER_PROFILE=medium \
+  PROJECT_PROFILE=celery-profile.env \
+  ./core/up.sh up
+
+# Production: full mode, hybrid brokers, dual workers with unified Flower
 MODE=full BROKER_MODE=hybrid WORKER_MODE=dual SERVER_PROFILE=large \
   PROJECT_PROFILE=celery-profile.env \
-  ./core/up.sh
+  ./core/up.sh up
 ```
 
-> **Important:** Nginx requires TLS certificates to start. Step 3 generates self-signed certs for `localhost` — no domain name needed for local development. See [docs/README.md](docs/README.md) for the full deployment guide including Let's Encrypt setup.
+`./setup.sh` runs the dependency chain (`init-secrets.sh` → `generate_mtls_certs.sh localhost` → profile template) exactly once each; `up.sh` preflight-checks certs, profile variables, and dimension compatibility before any container starts, and probes all published ports after launch.
+
+> **Important:** Nginx requires TLS certificates to start. `setup.sh` generates self-signed certs for `localhost` — no domain name needed for local development. See [docs/README.md](docs/README.md) for the full deployment guide including Let's Encrypt setup.
+
+### Which env file does what?
+
+| File | Committed? | Who edits it | Contents |
+|---|---|---|---|
+| `.docker.env` | Yes | Platform authors | System-wide non-secret defaults (ports, sizing, hosts) |
+| `.env.secrets` | **Never** | `init-secrets.sh` (generated) | Passwords and tokens |
+| `celery-profile.env` | Your call | **You** | Your project: `APP_PATH`, `CELERY_APP_*`, queues, Django settings |
+| `.celery-profile.env.example` | Yes | Platform authors | Template for `celery-profile.env` |
+
+Precedence at launch: later `--env-file` flags win; your `celery-profile.env` overrides `.docker.env`, and `.env.secrets` is loaded last.
 
 ---
 
@@ -108,19 +122,4 @@ django-celery-platform/
 │   │   │   └── worker.dual.env
 │   │   ├── docker-compose.workers.yml  # always loaded
 │   │   ├── docker-compose.asgi.yml     # loaded when ASGI_MODE=true
-│   │   └── docker-compose.dual-workers.yml  # loaded when WORKER_MODE=dual
-│   └── observability/                  # Prometheus, Grafana, Alertmanager
-├── core/
-│   ├── up.sh                           # Smart Launcher — the only command you need
-│   ├── modes/
-│   │   ├── minimal.yml
-│   │   ├── standard.yml
-│   │   ├── full.yml
-│   │   └── dual-workers.yml            # scales celery-beat to 0 when WORKER_MODE=dual
-│   └── profiles/                       # sizing.small / medium / large .env
-├── docs/                               # Platform documentation
-├── .docker.env                         # Non-secret system-wide defaults (safe to commit)
-├── .env.secrets.example                # Secrets template (safe to commit)
-├── .env.secrets                        # Generated secrets — gitignored, never commit
-└── init-secrets.sh                     # Zero-trust secrets generator
-```
+│   │   �
