@@ -21,6 +21,11 @@ services:
       - DJANGO_ASGI_PORT=${DJANGO_ASGI_PORT:-9501}
       - NGINX_CLIENT_MAX_BODY_SIZE=${NGINX_CLIENT_MAX_BODY_SIZE:-100M}
       - NGINX_RATE_LIMIT=${NGINX_RATE_LIMIT:-10r/s}
+    # host.docker.internal resolves natively on Docker Desktop only.
+    # On Linux hosts it must be mapped to the host gateway explicitly,
+    # otherwise nginx exits with "host not found in upstream".
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${NGINX_HTTP_PORT:-8080}:80"
       - "${NGINX_HTTPS_PORT:-8443}:443"

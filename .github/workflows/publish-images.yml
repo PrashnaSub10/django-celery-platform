@@ -1,0 +1,64 @@
+# ============================================================
+# publish-images.yml — Build & publish worker images to GHCR
+# ============================================================
+# Publishes all five capability variants so consuming hosts can
+# `docker pull` instead of building locally:
+#
+#   ghcr.io/<owner>/celery-microservice:{base,mssql,pdf,smb,full}
+#
+# Build order matters: mssql/pdf/smb are FROM base; full is FROM pdf.
+# Runs on pushes to main that touch worker build inputs, and on demand.
+# ============================================================
+
+name: Publish worker images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "components/workers/Dockerfile.*"
+      - "components/workers/requirements/**"
+      - "components/workers/docker-entrypoint.sh"
+      - ".github/workflows/publish-images.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build variants in dependency order
+        working-directory: components/workers
+        run: |
+          set -euo pipefail
+          for variant in base mssql pdf smb full; do
+            echo "::group::build $variant"
+            docker build -t "celery-microservice:${variant}" -f "Dockerfile.${variant}" .
+            echo "::endgroup::"
+          done
+
+      - name: Tag and push to GHCR
+        run: |
+          set -euo pipefail
+          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          for variant in base mssql pdf smb full; do
+            docker tag "celery-microservice:${variant}" "ghcr.io/${OWNER}/celery-microservice:${variant}"
+            docker push "ghcr.io/${OWNER}/celery-microservice:${variant}"
+          done
+
+      - name: Smoke-test entrypoint
+        run: |
+          docker run --rm --entrypoint /docker-entrypoint.sh \
+            -e CODE_SOURCE=image -e PREFLIGHT_IMPORT=false \
+            celery-microservice:base python3 -c "import celery; print(celery.__version__)"

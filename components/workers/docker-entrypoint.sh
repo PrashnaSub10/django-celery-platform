@@ -166,5 +166,42 @@ if [ "$#" -eq 0 ]; then
     exit 1
 fi
 
+# ── Preflight: import the Celery app before exec ─────────────
+# A failed import inside `celery worker` produces a deep traceback and a
+# silent restart loop. Importing here instead lets us fail fast with an
+# actionable banner. Disable with PREFLIGHT_IMPORT=false.
+if [ "${PREFLIGHT_IMPORT:-true}" = "true" ]; then
+    _app_spec=""
+    _prev=""
+    for _arg in "$@"; do
+        if [ "$_prev" = "-A" ] || [ "$_prev" = "--app" ]; then
+            _app_spec="$_arg"
+            break
+        fi
+        _prev="$_arg"
+    done
+    if [ -n "$_app_spec" ]; then
+        _app_module="${_app_spec%%:*}"
+        echo "[entrypoint] Preflight: importing ${_app_module} ..."
+        if ! python3 -c "import importlib; importlib.import_module('${_app_module}')" 2>/tmp/preflight-error.log; then
+            echo "============================================================"
+            echo "[entrypoint] FATAL: failed to import '${_app_module}'."
+            echo "[entrypoint] Root cause (last lines of traceback):"
+            tail -n 15 /tmp/preflight-error.log | sed 's/^/[entrypoint]   /'
+            echo "[entrypoint]"
+            echo "[entrypoint] Common causes:"
+            echo "[entrypoint]  - Missing native library (libgobject/libpango/ODBC):"
+            echo "[entrypoint]      switch WORKER_IMAGE to :pdf, :mssql, or :full"
+            echo "[entrypoint]  - Settings module crashed at import (bad path/env):"
+            echo "[entrypoint]      check DJANGO_SETTINGS_MODULE / DJANGO_DOTENV_FILE"
+            echo "[entrypoint]  - Code not mounted: check CODE_SOURCE and APP_PATH"
+            echo "[entrypoint] Full traceback: /tmp/preflight-error.log (inside container)"
+            echo "============================================================"
+            exit 1
+        fi
+        echo "[entrypoint] Preflight OK."
+    fi
+fi
+
 echo "[entrypoint] Launching: $*"
 exec "$@"

@@ -5,9 +5,12 @@
 # Only install in workers that generate PDFs or process images.
 # ============================================================
 
-PyMuPDF==1.23.26
-Pillow==10.2.0
-pillow-heif==0.13.1
+# Pins below must ship cp313 wheels — the base image is Python 3.13.
+# Older pins (PyMuPDF 1.23.x, Pillow 10.2) have no 3.13 wheels and force a
+# from-source MuPDF build that fails on modern g++.
+PyMuPDF==1.26.7
+Pillow==11.3.0
+pillow-heif==1.4.0
 reportlab==4.0.7
 pypdf==6.7.0
 weasyprint==63.1

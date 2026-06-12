@@ -8,7 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **GHCR publishing workflow** (`.github/workflows/publish-images.yml`) — builds all five
+  worker image variants in dependency order (base → mssql/pdf/smb → full) and pushes them
+  to `ghcr.io/<owner>/celery-microservice:<variant>`, so fresh hosts can pull instead of
+  hand-building the Dockerfile chain.
+- **Entrypoint preflight import** — `docker-entrypoint.sh` now imports the Celery app
+  module (parsed from `-A`/`--app`) before `exec`, and on failure prints an actionable
+  banner (missing native lib → switch `WORKER_IMAGE` variant; settings import crash →
+  check `DJANGO_SETTINGS_MODULE`/`DJANGO_DOTENV_FILE`; code not mounted → check
+  `CODE_SOURCE`/`APP_PATH`) instead of crash-looping with a buried traceback. Disable
+  with `PREFLIGHT_IMPORT=false`.
+
 ### Fixed
+- **PDF image build failure on Python 3.13** — `requirements/pdf.txt` pinned
+  `PyMuPDF==1.23.26`, `Pillow==10.2.0`, and `pillow-heif==0.13.1`, none of which ship
+  cp313 wheels; pip fell back to a from-source MuPDF build that fails on modern g++.
+  Bumped to `PyMuPDF==1.26.7`, `Pillow==11.3.0`, `pillow-heif==1.4.0` (all wheel-only
+  installs on Python 3.13).
+- **Gateway "host not found in upstream" on Linux hosts** — `host.docker.internal`
+  only resolves natively on Docker Desktop. Added
+  `extra_hosts: host.docker.internal:host-gateway` to the nginx service in
+  `docker-compose.gateway.yml` (matching the observability stack), so the default
+  upstream resolves on Linux. Override the target with
+  `DJANGO_UPSTREAM_HOST`/`DJANGO_UPSTREAM_PORT`.
 - **Worker restart loop on all platforms** — `docker-entrypoint.sh` used `/dev/tcp` TCP
   probes (`WAIT_FOR_REDIS`, `WAIT_FOR_RABBITMQ`, `WAIT_FOR_KAFKA`) inside a `#!/bin/sh`
   script. `/dev/tcp` is a bash-only pseudo-device; `python:3.13-slim` ships `dash` as
@@ -149,37 +172,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Five Dockerfiles: `Dockerfile.base`, `.full`, `.mssql`, `.pdf`, `.smb`.
 - `components/workers/config/` — reference Celery configuration modules:
   `broker_settings.py`, `celery_config.py`, `celery_hybrid.py`,
-  `django_celery_integration.py`, `path_utils.py`.
-- `components/workers/strategies/` — `broker.*.env` + `worker.*.env` strategy files.
-- `init-secrets.sh` — zero-trust secrets generator (strong random passwords).
-- `docs/FAILURE_MODES.md` — platform engineering triage guide.
-- `docs/MTLS-SETUP-GUIDE.md` — mTLS certificate lifecycle.
-- `docs/DEVELOPER_GUIDE.md` — full Django integration guide.
-- `docs/ARCHITECTURE_DIAGRAM.md` — component topology and port mapping.
-
-### Changed
-- `Dockerfile.base` — upgraded `pip` pin from `24.0` to `25.1`.
-- All worker images now run as non-root `celery` user.
-- `core/up.sh` — validates all dimension values against allowlist before constructing
-  file paths; exits with a clear error if `WORKER_MODE=dual` is requested without
-  `BROKER_MODE=hybrid`.
-
-### Fixed
-- `from __future__ import annotations` removed from platform config files (not needed
-  on Python 3.13; `str | None` union syntax is native).
-
----
-
-## [3.0.0] — 2025-12
-
-### Added
-- Initial composable monorepo architecture with four autonomous components:
-  `brokers`, `gateway`, `workers`, `observability`.
-- `MODE` dimension: `minimal` / `standard` / `full`.
-- `BROKER_MODE` dimension: `redis` / `rabbitmq` / `hybrid`.
-- `SERVER_PROFILE` dimension: `small` / `medium` / `large`.
-- `core/up.sh` Smart Launcher.
-- Prometheus + Grafana + Alertmanager observability stack (5 auto-provisioned dashboards).
-- Nginx TLS termination with mTLS option.
-- Per-broker Flower instances (`:5555` Redis, `:5556` RabbitMQ).
-- `celery-broker-net` Docker network (`10.220.220.0/24`).
+  `django_celery_integration.py`, `path_
