@@ -80,6 +80,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   with `PREFLIGHT_IMPORT=false`.
 
 ### Fixed
+- **Gateway + observability smoke tests failing standalone (CI red since the
+  compose paths moved to repo-root-relative)** — both `smoke_test.sh` scripts
+  ran `docker compose` from their component directory, so volume binds like
+  `./components/gateway/templates` resolved to nonexistent paths → empty
+  template mounts → no `/health` route → false failures. Both now pin
+  `--project-directory ../..`, matching `up.sh`'s convention. The smoke CI
+  job no longer re-runs component smoke tests against a live stack (container
+  name collision + teardown traps); it validates the integrated stack
+  directly (Redis health, gateway TLS `/health`).
 - **False-negative healthchecks** — the gateway check used `localhost`, which
   alpine resolves to `::1` while the templated nginx listens IPv4-only
   (perma-"unhealthy" on a working gateway); the Flower hybrid/kafka checks

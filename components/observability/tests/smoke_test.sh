@@ -71,18 +71,23 @@ export PORT_GRAFANA="${PORT_GRAFANA:-8300}"
 # Network must exist for the monitoring compose to attach to
 docker network create celery-broker-net 2>/dev/null || true
 
-trap 'docker compose -f docker-compose.monitoring.yml down -v 2>/dev/null || true
+# Compose volume paths in docker-compose.monitoring.yml are written relative
+# to the REPO ROOT (up.sh pins --project-directory) — pin it here too, or the
+# ./components/observability/* binds resolve to nonexistent paths.
+DC="docker compose --project-directory ../.. -f docker-compose.monitoring.yml"
+
+trap '$DC down -v 2>/dev/null || true
       docker network rm celery-broker-net 2>/dev/null || true' EXIT
 
-docker compose -f docker-compose.monitoring.yml up -d prometheus grafana
+$DC up -d prometheus grafana
 
 _wait_for_http "http://localhost:${PORT_PROMETHEUS}/-/healthy" "Prometheus" 20 3 || {
-    docker compose -f docker-compose.monitoring.yml logs prometheus
+    $DC logs prometheus
     exit 1
 }
 
 _wait_for_http "http://localhost:${PORT_GRAFANA}/api/health" "Grafana" 20 3 || {
-    docker compose -f docker-compose.monitoring.yml logs grafana
+    $DC logs grafana
     exit 1
 }
 

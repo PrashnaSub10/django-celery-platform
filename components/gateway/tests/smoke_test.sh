@@ -9,8 +9,15 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+# Compose volume paths in docker-compose.gateway.yml are written relative to
+# the REPO ROOT (up.sh pins --project-directory). Running compose from this
+# component dir without it resolves ./components/gateway/templates to a
+# nonexistent path → empty templates mount → no /health route → false failure.
+DC="docker compose --project-directory ../.. -f docker-compose.gateway.yml"
+
 TEMP_CERTS=false
-trap 'docker compose -f docker-compose.gateway.yml down 2>/dev/null || true
+trap '$DC down 2>/dev/null || true
       docker network rm celery-broker-net 2>/dev/null || true
       [ "$TEMP_CERTS" = "true" ] && rm -f ssl/fullchain.pem ssl/privkey.pem || true' EXIT
 
@@ -43,7 +50,7 @@ export DJANGO_UPSTREAM_HOST="${DJANGO_UPSTREAM_HOST:-127.0.0.1}"
 export DJANGO_ASGI_HOST="${DJANGO_ASGI_HOST:-127.0.0.1}"
 
 echo "[2/3] booting gateway isolated..."
-docker compose -f docker-compose.gateway.yml up -d
+$DC up -d
 
 # Give it a few seconds to process templates
 sleep 5
