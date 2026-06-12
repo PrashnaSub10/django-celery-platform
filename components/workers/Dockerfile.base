@@ -5,7 +5,7 @@
 # Use this for workers that don't need ODBC, SMB, or PDF libs.
 # Tag: celery-microservice:base
 # ============================================================
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 LABEL maintainer="django-celery-platform" \
       description="Base Celery worker — core dependencies only" \
