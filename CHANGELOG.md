@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Documentation
+- **`docs/CONTRIBUTION_ROADMAP.md`** — module-to-industry coverage matrix
+  (which broker lanes / dimensions serve fintech, IoT, SaaS, government,
+  agencies), a tiered contribution menu (good-first-issue → maintainer),
+  operational-debt list from real deployment cycles, and contribution rules
+  (directory convention, smoke tests, backward compatibility).
+
 ### Reliability (DevOps review pass)
 - **Critical worker pool: solo → prefork** in `sizing.medium.env` / `sizing.large.env`
   (with `CRITICAL_POOL` now set explicitly per profile; `small` keeps `solo`).
