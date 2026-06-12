@@ -4,22 +4,17 @@
 # Philosophy: "You can now see problems before users report them"
 # Purpose: Stability + visibility.
 # Adds: Prometheus, Grafana, exporters.
-# Excludes: RabbitMQ, Alertmanager.
+# Excludes: Kafka, Alertmanager.
+#
+# NOTE: RabbitMQ / worker-critical are intentionally left at their
+# default scale (1) here. BROKER_MODE=hybrid and WORKER_MODE=dual
+# (validated above) require both brokers to run, and up.sh's own
+# guidance says "Use MODE=standard or MODE=full for RabbitMQ or
+# hybrid broker strategies" — disabling them here would silently
+# break that combination.
 # ============================================================
 
 services:
-  # Turn off RabbitMQ infrastructure
-  rabbitmq:
-    scale: 0
-  flower-rabbitmq:
-    scale: 0
-  worker-critical:
-    scale: 0
-  rabbitmq-exporter:
-    scale: 0
-  celery-exporter-rabbitmq:
-    scale: 0
-
   # Turn off Kafka infrastructure
   kafka:
     scale: 0
