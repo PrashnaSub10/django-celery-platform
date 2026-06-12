@@ -80,7 +80,7 @@ services:
 
   # ── Kafka (KRaft mode — no ZooKeeper) ──────────────────────
   kafka:
-    image: bitnami/kafka:3.9
+    image: bitnamilegacy/kafka:3.9
     container_name: celery-kafka-shared
     restart: always
     ports:
