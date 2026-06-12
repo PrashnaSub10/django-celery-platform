@@ -31,6 +31,7 @@ x-worker-base: &worker-base
     - worker_logs:/app/logs
   environment:
     - PYTHONPATH=/app
+    - HOME=/tmp
     - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
     - DJANGO_DOTENV_FILE=${DJANGO_DOTENV_FILE:-}
     - CONTAINER_ENV=true
@@ -78,6 +79,7 @@ services:
       --prefetch-multiplier=${FAST_PREFETCH:-4}
     environment:
       - PYTHONPATH=/app
+      - HOME=/tmp
       - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
       - DJANGO_DOTENV_FILE=${DJANGO_DOTENV_FILE:-}
       - CONTAINER_ENV=true
@@ -125,6 +127,7 @@ services:
       - ${MEDIA_VOLUME_PATH:-/dev/null}:/mnt/media
     environment:
       - PYTHONPATH=/app
+      - HOME=/tmp
       - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
       - DJANGO_DOTENV_FILE=${DJANGO_DOTENV_FILE:-}
       - CONTAINER_ENV=true
@@ -165,6 +168,7 @@ services:
       - beat_data:/app/beat_data
     environment:
       - PYTHONPATH=/app
+      - HOME=/tmp
       - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
       - DJANGO_DOTENV_FILE=${DJANGO_DOTENV_FILE:-}
       - CONTAINER_ENV=true

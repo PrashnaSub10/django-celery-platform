@@ -36,6 +36,7 @@ x-dual-worker-base: &dual-worker-base
     - worker_logs:/app/logs
   environment:
     - PYTHONPATH=/app
+    - HOME=/tmp
     - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
     - DJANGO_DOTENV_FILE=${DJANGO_DOTENV_FILE:-}
     - CONTAINER_ENV=true
@@ -123,6 +124,7 @@ services:
       - beat_data:/app/beat_data
     environment:
       - PYTHONPATH=/app
+      - HOME=/tmp
       - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
       - DJANGO_DOTENV_FILE=${DJANGO_DOTENV_FILE:-}
       - CONTAINER_ENV=true
