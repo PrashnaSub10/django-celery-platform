@@ -7,6 +7,14 @@ updates:
     directory: /components/workers
     schedule:
       interval: weekly
+    ignore:
+      # Python major/minor bumps are a deliberate, tested migration — the
+      # requirements pins (PyMuPDF/Pillow cp313 wheels) are version-coupled.
+      # Patch updates (3.13.x) are welcome.
+      - dependency-name: python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
   - package-ecosystem: github-actions
     directory: /
     schedule:
