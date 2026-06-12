@@ -29,7 +29,7 @@ services:
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
     volumes:
-      - ./prometheus:/prometheus-config:ro
+      - ./components/observability/prometheus:/prometheus-config:ro
       - prometheus_data:/prometheus
     environment:
       - METRICS_TARGET_HOST=${METRICS_TARGET_HOST:-host.docker.internal}
@@ -62,7 +62,7 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=${GRAFANA_ALLOW_SIGN_UP:-false}
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./components/observability/grafana/provisioning:/etc/grafana/provisioning:ro
     networks:
       - celery-broker-net
     depends_on:
@@ -175,7 +175,7 @@ services:
     ports:
       - "127.0.0.1:${PORT_ALERTMANAGER:-9093}:9093"
     volumes:
-      - ./prometheus:/prometheus-config:ro
+      - ./components/observability/prometheus:/prometheus-config:ro
       - alertmanager_data:/alertmanager
     environment:
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}

@@ -11,8 +11,8 @@ services:
     container_name: celery-nginx-shared
     restart: always
     volumes:
-      - ./templates:/etc/nginx/templates:ro
-      - ./ssl:/etc/nginx/ssl:ro
+      - ./components/gateway/templates:/etc/nginx/templates:ro
+      - ./components/gateway/ssl:/etc/nginx/ssl:ro
       - nginx_logs:/var/log/nginx
     environment:
       - DJANGO_UPSTREAM_HOST=${DJANGO_UPSTREAM_HOST:-host.docker.internal}

@@ -230,7 +230,13 @@ if [ "$BROKER_MODE" = "kafka" ]; then
 fi
 
 # ── Build the base compose command ───────────────────────────
+# --project-directory is pinned to REPO_ROOT because docker compose
+# resolves relative volume paths (./prometheus, ./templates, etc.) against
+# the directory of the FIRST -f file (components/brokers/) by default, not
+# against each individual fragment's own directory or the cwd. Every
+# relative path below is written relative to REPO_ROOT to match.
 COMPOSE_CMD="docker compose \
+  --project-directory ${REPO_ROOT} \
   -f components/brokers/docker-compose.brokers.yml \
   -f components/gateway/docker-compose.gateway.yml \
   -f components/workers/docker-compose.workers.yml \
