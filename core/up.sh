@@ -250,6 +250,23 @@ COMPOSE_CMD="docker compose \
   --env-file components/workers/strategies/worker.${WORKER_MODE}.env \
   --env-file .env.secrets"
 
+# ── Ensure the shared broker network exists ───────────────────
+# components/workers/*.yml and components/workers/docker-compose.dual-workers.yml
+# declare celery-broker-net as `external: true`. When merged with
+# components/brokers/docker-compose.brokers.yml (which defines the network),
+# docker compose's merge resolves the network as external — so on a first
+# run, "up" fails with "network celery-broker-net declared as external, but
+# could not be found" because nothing ever creates it. Create it ourselves,
+# idempotently, before bringing up the stack.
+if [ "$COMMAND" = "up" ] || [ "$COMMAND" = "restart" ]; then
+  if ! docker network inspect celery-broker-net >/dev/null 2>&1; then
+    NETWORK_SUBNET=$(grep -E '^CELERY_NETWORK_SUBNET=' .docker.env 2>/dev/null | cut -d= -f2-)
+    NETWORK_SUBNET="${NETWORK_SUBNET:-10.220.200.0/24}"
+    echo "Creating docker network celery-broker-net (${NETWORK_SUBNET})..."
+    docker network create --driver bridge --subnet "${NETWORK_SUBNET}" celery-broker-net
+  fi
+fi
+
 case "$COMMAND" in
   up)
     eval "$COMPOSE_CMD up -d"
