@@ -73,6 +73,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   with `PREFLIGHT_IMPORT=false`.
 
 ### Fixed
+- **False-negative healthchecks** — the gateway check used `localhost`, which
+  alpine resolves to `::1` while the templated nginx listens IPv4-only
+  (perma-"unhealthy" on a working gateway); the Flower hybrid/kafka checks
+  called `wget`, which does not exist in the python-slim worker image. Gateway
+  now probes `127.0.0.1`; Flower checks use `python3 -c urllib.request`.
 - **PDF image build failure on Python 3.13** — `requirements/pdf.txt` pinned
   `PyMuPDF==1.23.26`, `Pillow==10.2.0`, and `pillow-heif==0.13.1`, none of which ship
   cp313 wheels; pip fell back to a from-source MuPDF build that fails on modern g++.

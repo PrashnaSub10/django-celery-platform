@@ -37,7 +37,10 @@ services:
     # four compose files into one project and startup ordering is handled by
     # the broker healthchecks defined in components/brokers/docker-compose.brokers.yml.
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/health || exit 1"]
+      # 127.0.0.1, not localhost: alpine resolves localhost to ::1 first and
+      # the templated nginx config listens on IPv4 only — the check would
+      # report unhealthy while the gateway serves fine.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
