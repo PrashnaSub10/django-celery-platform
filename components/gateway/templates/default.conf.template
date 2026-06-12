@@ -58,8 +58,7 @@ server {
     location /stub_status {
         stub_status;
         allow 127.0.0.1;
-        allow 10.220.220.0/24;
-        allow 10.220.240.0/24;
+        allow 10.220.200.0/24;
         deny all;
     }
 
