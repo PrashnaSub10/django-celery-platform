@@ -8,7 +8,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Reliability (DevOps review pass)
+- **Critical worker pool: solo → prefork** in `sizing.medium.env` / `sizing.large.env`
+  (with `CRITICAL_POOL` now set explicitly per profile; `small` keeps `solo`).
+  Previously medium/large set `CRITICAL_CONCURRENCY=2/4` but the pool stayed
+  `solo`, which ignores concurrency — the "critical" lane was silently serial.
+- **Redis eviction policy: allkeys-lru → volatile-lru** (`REDIS_MAXMEMORY` /
+  `REDIS_MAXMEMORY_POLICY` now overridable in `.docker.env`). allkeys-lru on a
+  broker can evict queued tasks under memory pressure — silent task loss.
+  volatile-lru only evicts TTL'd keys; paired with new `result_expires: 3600`
+  in `REDIS_CONF`/`RABBITMQ_CONF` so results are the only eviction candidates.
+- **Dead-letter queue helper** — `rabbitmq_queues_with_dlq(queue_name)` in
+  `broker_settings.py` declares the work queue with `x-dead-letter-*` arguments
+  plus a `dlq.<queue>` companion (24h TTL), so tasks that exhaust retries are
+  parked for replay instead of discarded. Opt-in (redeclaring existing queues
+  with new arguments raises PRECONDITION_FAILED — documented in the docstring).
+- **Subnet drift guard in `up.sh`** — if `celery-broker-net` exists with a
+  different subnet than `CELERY_NETWORK_SUBNET`, abort with the exact fix
+  instead of silently joining the stale subnet (which breaks IP allowlists).
+- **`rotate-secrets.sh`** — graceful one-credential-at-a-time rotation
+  (live `CONFIG SET requirepass` / `rabbitmqctl change_password` → update
+  `.env.secrets` → restart consumers only → verify), replacing the
+  delete-everything-and-restart rotation model.
+- **Smoke-test CI** (`.github/workflows/smoke.yml`) — every PR builds the base
+  image, runs `setup.sh`, boots `MODE=minimal`, and executes the per-component
+  `tests/smoke_test.sh` scripts that previously never ran in CI.
+- **Dependabot** for worker Dockerfiles and GitHub Actions (weekly) — surfaces
+  base-image drift as reviewable PRs.
+- **DEVELOPER_GUIDE: Beat hardening** — documents `django-celery-beat`
+  DatabaseScheduler (schedule survives volume loss) and alerting on Beat
+  silence.
+
 ### Added
+- **`setup.sh` first-run orchestrator** — runs the implicit dependency chain
+  (prerequisite check → `init-secrets.sh` → `generate_mtls_certs.sh localhost` →
+  profile template) explicitly and idempotently, reducing first run to
+  `./setup.sh` + edit one file + `./core/up.sh up`.
+- **`up.sh` TLS preflight** — fails before any compose command with the exact
+  cert-generation instruction when `components/gateway/ssl/{fullchain,privkey}.pem`
+  are missing, instead of letting Nginx crash cryptically.
+- **`up.sh` profile validation** — `CODE_SOURCE=bind` now verifies `APP_PATH`
+  exists on the host (prevents a silent worker import crash-loop), and
+  `CELERY_APP_*` values are warned about when not in `module:attribute` format.
+- **`up.sh` post-launch health summary** — after `up`/`restart`, probes the
+  published ports (gateway, Flower variants per broker/worker mode, Grafana,
+  Prometheus) via bash `/dev/tcp` and prints a ✓/✗ table with a `docker logs`
+  hint, instead of ending at "Stack is up".
+- **README: prerequisites + env-file overview** — Quick Start now lists Docker/
+  Compose/openssl requirements, starts from `MODE=minimal` and promotes upward,
+  and documents the `.docker.env` / `.env.secrets` / `celery-profile.env`
+  trinity with a precedence table.
+- **DEVELOPER_GUIDE: group-based `APP_PATH` permissions** — replaced the
+  recursive `chmod o+rX` advice with a `celery-shared` group pattern;
+  world-readable kept only as an explicit single-user-dev fallback.
 - **GHCR publishing workflow** (`.github/workflows/publish-images.yml`) — builds all five
   worker image variants in dependency order (base → mssql/pdf/smb → full) and pushes them
   to `ghcr.io/<owner>/celery-microservice:<variant>`, so fresh hosts can pull instead of
@@ -172,4 +224,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Five Dockerfiles: `Dockerfile.base`, `.full`, `.mssql`, `.pdf`, `.smb`.
 - `components/workers/config/` — reference Celery configuration modules:
   `broker_settings.py`, `celery_config.py`, `celery_hybrid.py`,
-  `django_celery_integration.py`, `path_
+  `django_celery_integration.py`, `path_utils.py`.
+- `components/workers/strategies/` — `broker.*.env` + `worker.*.env` strategy files.
+- `init-secrets.sh` — zero-trust secrets generator (strong random passwords).
+- `docs/FAILURE_MODES.md` — platform engineering triage guide.
+- `docs/MTLS-SETUP-GUIDE.md` — mTLS certificate lifecycle.
+- `docs/DEVELOPER_GUIDE.md` — full Django integration guide.
+- `docs/ARCHITECTURE_DIAGRAM.md` — component topology and port mapping.
+
+### Changed
+- `Dockerfile.base` — upgraded `pip` pin from `24.0` to `25.1`.
+- All worker images now run as non-root `celery` user.
+- `core/up.sh` — validates all dimension values against allowlist before constructing
+  file paths; exits with a clear error if `WORKER_MODE=dual` is requested without
+  `BROKER_MODE=hybrid`.
+
+### Fixed
+- `from __future__ import annotations` removed from platform config files (not needed
+  on Python 3.13; `str | None` union syntax is native).
+
+---
+
+## [3.0.0] — 2025-12
+
+### Added
+- Initial composable monorepo architecture with four autonomous components:
+  `brokers`, `gateway`, `workers`, `observability`.
+- `MODE` dimension: `minimal` / `standard` / `full`.
+- `BROKER_MODE` dimension: `redis` / `rabbitmq` / `hybrid`.
+- `SERVER_PROFILE` dimension: `small` / `medium` / `large`.
+- `core/up.sh` Smart Launcher.
+- Prometheus + Grafana + Alertmanager observability stack (5 auto-provisioned dashboards).
+- Nginx TLS termination with mTLS option.
+- Per-broker Flower instances (`:5555` Redis, `:5556` RabbitMQ).
+- `celery-broker-net` Docker network (`10.220.220.0/24`).

@@ -1,0 +1,64 @@
+# ============================================================
+# smoke.yml — Boot the minimal stack and run component smoke tests
+# ============================================================
+# Validates that a stranger on a fresh machine can go from clone
+# to a running stack — the exact path setup.sh + up.sh promise.
+# ============================================================
+
+name: Smoke test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build base worker image
+        run: docker build -t celery-microservice:base -f components/workers/Dockerfile.base components/workers/
+
+      - name: First-run setup (secrets + TLS certs + profile)
+        run: |
+          ./setup.sh
+          # Point the profile at a real directory + the platform's own
+          # reference config so CODE_SOURCE=bind validation passes.
+          sed -i "s|^APP_PATH=.*|APP_PATH=$(pwd)/components/workers|" celery-profile.env || \
+            echo "APP_PATH=$(pwd)/components/workers" >> celery-profile.env
+          grep -q '^WORKER_IMAGE=' celery-profile.env && \
+            sed -i 's|^WORKER_IMAGE=.*|WORKER_IMAGE=celery-microservice:base|' celery-profile.env || \
+            echo "WORKER_IMAGE=celery-microservice:base" >> celery-profile.env
+
+      - name: Start minimal stack
+        run: |
+          MODE=minimal BROKER_MODE=redis SERVER_PROFILE=small \
+            PROJECT_PROFILE=celery-profile.env ./core/up.sh up
+
+      - name: Component smoke tests
+        run: |
+          for t in components/brokers/tests/smoke_test.sh \
+                   components/gateway/tests/smoke_test.sh \
+                   components/workers/tests/smoke_test.sh; do
+            if [ -f "$t" ]; then
+              echo "::group::$t"
+              bash "$t" || exit 1
+              echo "::endgroup::"
+            fi
+          done
+
+      - name: Show container state on failure
+        if: failure()
+        run: |
+          docker ps -a
+          for c in $(docker ps -aq); do
+            echo "==== $(docker inspect -f '{{.Name}}' "$c") ===="
+            docker logs --tail 30 "$c" 2>&1 || true
+          done
+
+      - name: Tear down
+        if: always()
+        run: PROJECT_PROFILE=celery-profile.env ./core/up.sh down || true

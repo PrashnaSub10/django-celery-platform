@@ -13,11 +13,16 @@ services:
     restart: always
     ports:
       - "127.0.0.1:${PORT_REDIS:-6379}:6379"
+    # maxmemory-policy: volatile-lru, NOT allkeys-lru. This Redis is a Celery
+    # BROKER — queued tasks are list entries with no TTL. allkeys-lru can evict
+    # queued tasks under memory pressure (silent task loss). volatile-lru only
+    # evicts keys that carry a TTL (task results — see result_expires in
+    # broker_settings.py), never the queues themselves.
     command: >
       redis-server
       --appendonly yes
-      --maxmemory 512mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory ${REDIS_MAXMEMORY:-512mb}
+      --maxmemory-policy ${REDIS_MAXMEMORY_POLICY:-volatile-lru}
       --requirepass "${REDIS_PASSWORD:?REDIS_PASSWORD must be configured in .env.secrets (run ./init-secrets.sh)}"
     volumes:
       - redis_data:/data

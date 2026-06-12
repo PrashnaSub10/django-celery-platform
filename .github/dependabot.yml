@@ -1,0 +1,13 @@
+# Keep base images and action pins fresh — unpinned-but-tagged images
+# (python:3.13-slim) drift between builds; weekly PRs surface that drift
+# as reviewable diffs instead of silent behavior changes.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /components/workers
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

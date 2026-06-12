@@ -122,4 +122,19 @@ django-celery-platform/
 │   │   │   └── worker.dual.env
 │   │   ├── docker-compose.workers.yml  # always loaded
 │   │   ├── docker-compose.asgi.yml     # loaded when ASGI_MODE=true
-│   │   �
+│   │   └── docker-compose.dual-workers.yml  # loaded when WORKER_MODE=dual
+│   └── observability/                  # Prometheus, Grafana, Alertmanager
+├── core/
+│   ├── up.sh                           # Smart Launcher — the only command you need
+│   ├── modes/
+│   │   ├── minimal.yml
+│   │   ├── standard.yml
+│   │   ├── full.yml
+│   │   └── dual-workers.yml            # scales celery-beat to 0 when WORKER_MODE=dual
+│   └── profiles/                       # sizing.small / medium / large .env
+├── docs/                               # Platform documentation
+├── .docker.env                         # Non-secret system-wide defaults (safe to commit)
+├── .env.secrets.example                # Secrets template (safe to commit)
+├── .env.secrets                        # Generated secrets — gitignored, never commit
+└── init-secrets.sh                     # Zero-trust secrets generator
+```

@@ -290,4 +290,111 @@ COMPOSE_CMD="docker compose \
   --env-file components/workers/strategies/worker.${WORKER_MODE}.env \
   --env-file .env.secrets"
 
-# ── Ensure the shared broker network exists ──────────────────�
+# ── Ensure the shared broker network exists ───────────────────
+# components/workers/*.yml and components/workers/docker-compose.dual-workers.yml
+# declare celery-broker-net as `external: true`. When merged with
+# components/brokers/docker-compose.brokers.yml (which defines the network),
+# docker compose's merge resolves the network as external — so on a first
+# run, "up" fails with "network celery-broker-net declared as external, but
+# could not be found" because nothing ever creates it. Create it ourselves,
+# idempotently, before bringing up the stack.
+if [ "$COMMAND" = "up" ] || [ "$COMMAND" = "restart" ]; then
+  NETWORK_SUBNET=$(grep -E '^CELERY_NETWORK_SUBNET=' .docker.env 2>/dev/null | cut -d= -f2-)
+  NETWORK_SUBNET="${NETWORK_SUBNET:-10.220.200.0/24}"
+  if ! docker network inspect celery-broker-net >/dev/null 2>&1; then
+    echo "Creating docker network celery-broker-net (${NETWORK_SUBNET})..."
+    docker network create --driver bridge --subnet "${NETWORK_SUBNET}" celery-broker-net
+  else
+    # Subnet drift check — an existing network with a different subnet means
+    # the configuration changed after creation (or another stack owns the
+    # name). Containers would silently join the OLD subnet, breaking every
+    # IP-based allowlist (nginx stub_status, Prometheus scrape rules).
+    EXISTING_SUBNET=$(docker network inspect celery-broker-net \
+      --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null || true)
+    if [ -n "$EXISTING_SUBNET" ] && [ "$EXISTING_SUBNET" != "$NETWORK_SUBNET" ]; then
+      echo "❌ ERROR: network celery-broker-net exists with subnet ${EXISTING_SUBNET},"
+      echo "   but configuration requests ${NETWORK_SUBNET} (CELERY_NETWORK_SUBNET in .docker.env)."
+      echo "   Fix: ./core/up.sh down && docker network rm celery-broker-net"
+      echo "   then re-run this command to recreate it on the configured subnet."
+      exit 1
+    fi
+  fi
+fi
+
+# ── Post-launch health summary ────────────────────────────────
+# Probes the published ports so the user gets an immediate green/red
+# overview instead of having to run docker ps + curl manually.
+# Uses bash's /dev/tcp (up.sh is bash) — no nc/curl dependency.
+_env_default() {
+  # _env_default KEY DEFAULT — read KEY from .docker.env, else DEFAULT
+  local v
+  v=$(grep -E "^$1=" .docker.env 2>/dev/null | tail -1 | cut -d= -f2-)
+  echo "${v:-$2}"
+}
+
+_check_port() {
+  if (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; then
+    exec 3>&- 3<&-
+    echo "  ✓ $2 → 127.0.0.1:$1"
+  else
+    echo "  ✗ $2 NOT responding on :$1"
+    _HEALTH_FAILED=1
+  fi
+}
+
+post_launch_summary() {
+  echo ""
+  echo "=== Platform started. Probing published ports... ==="
+  sleep 5
+  _HEALTH_FAILED=0
+  _check_port "$(_env_default NGINX_HTTPS_PORT 8443)" "Nginx (HTTPS gateway)"
+  case "$BROKER_MODE" in
+    redis|hybrid) _check_port "$(_env_default FLOWER_PORT_REDIS 5555)" "Flower (Redis)" ;;
+  esac
+  case "$BROKER_MODE" in
+    rabbitmq|hybrid) _check_port "$(_env_default FLOWER_PORT_RABBITMQ 5556)" "Flower (RabbitMQ)" ;;
+  esac
+  [ "$WORKER_MODE" = "dual" ] && _check_port "$(_env_default FLOWER_PORT_HYBRID 5557)" "Flower (Hybrid)"
+  [ "$BROKER_MODE" = "kafka" ] && _check_port "$(_env_default FLOWER_PORT_KAFKA 5558)" "Flower (Kafka)"
+  if [ "$MODE" != "minimal" ]; then
+    _check_port "$(_env_default PORT_GRAFANA 8300)" "Grafana"
+    _check_port "$(_env_default PORT_PROMETHEUS 9090)" "Prometheus"
+  fi
+  echo ""
+  if [ "${_HEALTH_FAILED}" -eq 1 ]; then
+    echo "⚠️  Some services are not responding yet. They may still be starting —"
+    echo "   re-check in ~30s with: docker ps"
+    echo "   For any container that is restarting: docker logs <container-name>"
+  else
+    echo "✅ All expected ports are answering."
+  fi
+}
+
+case "$COMMAND" in
+  up)
+    eval "$COMPOSE_CMD up -d"
+    echo "--------------------------------------------------------"
+    post_launch_summary
+    ;;
+  down)
+    eval "$COMPOSE_CMD down"
+    echo "✅ Stack stopped."
+    ;;
+  restart)
+    eval "$COMPOSE_CMD down"
+    eval "$COMPOSE_CMD up -d"
+    echo "✅ Stack restarted."
+    post_launch_summary
+    ;;
+  ps)
+    eval "$COMPOSE_CMD ps"
+    ;;
+  logs)
+    eval "$COMPOSE_CMD logs -f"
+    ;;
+  *)
+    echo "❌ Unknown command: $COMMAND"
+    echo "   Usage: ./core/up.sh [up|down|restart|ps|logs]"
+    exit 1
+    ;;
+esac

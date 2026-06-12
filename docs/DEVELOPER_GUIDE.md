@@ -623,6 +623,26 @@ regardless of `MODE`.
 Grafana provisions all five dashboards automatically on first startup —
 no manual import needed.
 
+### Hardening periodic tasks (Beat)
+
+Beat is a single point of failure by design (exactly one scheduler may run).
+Two production recommendations:
+
+1. **Move the schedule into your database.** The default file-based schedule
+   lives in the `beat_data` volume — losing the volume silently stops all
+   periodic tasks. With `django-celery-beat` the schedule lives in Django's
+   DB, which you are already backing up:
+
+   ```python
+   # settings.py
+   INSTALLED_APPS += ["django_celery_beat"]
+   CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+   ```
+
+2. **Alert on Beat silence.** A dead Beat produces no errors — only absence.
+   Add a Prometheus alert on the heartbeat task the platform dispatches
+   (`platform.heartbeat`) not being seen for 10 minutes.
+
 ---
 
 ## Troubleshooting
@@ -703,4 +723,20 @@ For development only:
 
 ```env
 ALLOW_RUNTIME_PIP=true
-EXTRA_PIP_PACKAGE
+EXTRA_PIP_PACKAGES=pysmb==1.2.13
+```
+
+### WebSocket connections drop after 60 seconds
+
+Nginx `proxy_read_timeout` defaults to 60s for HTTP locations.  The
+`/ws/` location in `nginx.conf.template` sets `proxy_read_timeout 86400s`
+explicitly.  If you are seeing drops, confirm the Nginx config was
+regenerated after the last gateway restart:
+
+```bash
+docker exec celery-nginx-shared nginx -T | grep proxy_read_timeout
+# /ws/ block must show: proxy_read_timeout 86400s
+```
+
+If the value is missing, the template substitution failed.  Check
+`docker logs celery-nginx-shared` for `envsubst` errors.

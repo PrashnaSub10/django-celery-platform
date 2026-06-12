@@ -20,6 +20,7 @@ __all__ = [
     "REDIS_CONF",
     "RABBITMQ_CONF",
     "KAFKA_CONF",
+    "rabbitmq_queues_with_dlq",
 ]
 
 
@@ -100,6 +101,13 @@ REDIS_CONF: MappingProxyType[str, object] = MappingProxyType({
     "task_track_started": True,
     "task_time_limit": 300,
     "task_soft_time_limit": 240,
+    # TTL on result keys — pairs with the broker's volatile-lru eviction
+    # policy: only keys with a TTL (results) are eviction candidates,
+    # never queued tasks.
+    "result_expires": 3600,
+    "result_backend_transport_options": {
+        "retry_policy": {"max_retries": 3, "interval_start": 0.2, "interval_step": 0.3},
+    },
 })
 
 #: Configuration applied to the RabbitMQ / critical-task Celery app.
@@ -116,7 +124,51 @@ RABBITMQ_CONF: MappingProxyType[str, object] = MappingProxyType({
     "task_time_limit": 1800,
     "task_soft_time_limit": 1500,
     "task_reject_on_worker_lost": True,
+    "result_expires": 3600,
 })
+
+
+def rabbitmq_queues_with_dlq(queue_name: str) -> list:
+    """Declare a durable RabbitMQ queue paired with a dead-letter queue.
+
+    Without a DLQ, a task that exhausts ``max_retries`` is discarded by
+    Celery — for payment/audit workloads that is silent data loss. With
+    this helper, rejected/expired messages land in ``dlq.<queue_name>``
+    for inspection and manual replay.
+
+    Usage in your Celery app config::
+
+        from config.broker_settings import RABBITMQ_CONF, rabbitmq_queues_with_dlq
+
+        app_rabbitmq.conf.update(RABBITMQ_CONF)
+        app_rabbitmq.conf.task_queues = rabbitmq_queues_with_dlq("email_queue")
+
+    WARNING: RabbitMQ refuses to redeclare an existing queue with different
+    arguments (PRECONDITION_FAILED). Adopting the DLQ on an existing
+    deployment requires draining and deleting the old queue first:
+    ``rabbitmqctl delete_queue <queue_name>`` during a maintenance window.
+    """
+    from kombu import Exchange, Queue
+
+    return [
+        Queue(
+            queue_name,
+            Exchange("amq.direct", type="direct"),
+            routing_key=queue_name,
+            queue_arguments={
+                "x-dead-letter-exchange": "amq.direct",
+                "x-dead-letter-routing-key": f"dlq.{queue_name}",
+            },
+        ),
+        Queue(
+            f"dlq.{queue_name}",
+            Exchange("amq.direct", type="direct"),
+            routing_key=f"dlq.{queue_name}",
+            queue_arguments={
+                "x-message-ttl": 86_400_000,  # keep dead letters 24h
+            },
+        ),
+    ]
 
 #: Configuration applied to the Kafka / streaming-task Celery app.
 #: Kafka provides ordered, durable, high-throughput message delivery.
