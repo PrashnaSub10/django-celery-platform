@@ -17,13 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Build base worker image
         run: docker build -t celery-microservice:base -f components/workers/Dockerfile.base components/workers/
 
       - name: First-run setup (secrets + TLS certs + profile)
         run: |
+          chmod +x setup.sh init-secrets.sh components/gateway/scripts/generate_mtls_certs.sh
           ./setup.sh
           # Point the profile at a real directory + the platform's own
           # reference config so CODE_SOURCE=bind validation passes.
@@ -35,6 +36,7 @@ jobs:
 
       - name: Start minimal stack
         run: |
+          chmod +x core/up.sh
           MODE=minimal BROKER_MODE=redis SERVER_PROFILE=small \
             PROJECT_PROFILE=celery-profile.env ./core/up.sh up
 
