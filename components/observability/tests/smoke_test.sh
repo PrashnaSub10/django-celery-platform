@@ -68,6 +68,12 @@ export GF_SECURITY_ADMIN_PASSWORD="${GF_SECURITY_ADMIN_PASSWORD:-smokepass}"
 export PORT_PROMETHEUS="${PORT_PROMETHEUS:-9090}"
 export PORT_GRAFANA="${PORT_GRAFANA:-8300}"
 
+# docker compose interpolates the entire file even if we only start prometheus/grafana,
+# so we must supply the strict requirement variables to avoid failures.
+export REDIS_PASSWORD="${REDIS_PASSWORD:-smokepass}"
+export RABBITMQ_USER="${RABBITMQ_USER:-admin}"
+export RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-smokepass}"
+
 # Network must exist for the monitoring compose to attach to
 docker network create celery-broker-net 2>/dev/null || true
 
