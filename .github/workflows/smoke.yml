@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build base worker image
         run: docker build -t celery-microservice:base -f components/workers/Dockerfile.base components/workers/
